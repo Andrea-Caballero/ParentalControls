@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only manifest overlay. Merged with the main AndroidManifest.xml
+  when building the `debug` variant.
+
+  Enables cleartext HTTP so a debug build with `-PenableSharedMock=true`
+  can reach the developer-run local server (`tools/shared-mock-server/`)
+  over `adb reverse tcp:8787 tcp:8787` or `10.0.2.2:8787` from the
+  emulator. Release builds do NOT inherit this — production HTTPS to
+  Supabase is the only transport we want to ship.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:usesCleartextTraffic="true" />
+</manifest>

@@ -1,0 +1,16 @@
+{
+  "device_id": "test-device-001",
+  "version": 1,
+  "device_state": "LOCKED",
+  "daily_screen_time_minutes": 120,
+  "schedules": [],
+  "category_limits": [],
+  "app_policies": [
+    {
+      "package_name": "com.example.app",
+      "state": "ALLOWED"
+    }
+  ],
+  "category_assignments": {},
+  "grants": []
+}

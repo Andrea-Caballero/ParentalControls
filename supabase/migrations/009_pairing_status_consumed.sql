@@ -1,0 +1,29 @@
+-- 009: Add 'CONSUMED' value to pairing_status enum
+--
+-- Why: Bug #2 — `pairing/index.ts` was leaving consumed codes with
+-- status='ACTIVE' (only setting used_at), which let the same code be
+-- reused by the same agent before the TTL expired. We want a distinct
+-- terminal state for codes that have been successfully redeemed so
+-- `status='ACTIVE'` truly means "still available for redemption".
+--
+-- Semantics:
+--   ACTIVE    — still valid, not yet consumed, not expired
+--   CONSUMED  — redeemed by a successful pairing (terminal)
+--   EXPIRED   — past expires_at, was never redeemed (terminal)
+--   REVOKED   — explicitly cancelled by the parent (terminal)
+--
+-- Safety: ALTER TYPE ... ADD VALUE is safe to run on existing data.
+-- It does not modify existing rows; rows with the old enum values
+-- remain valid. The new value is only usable by code that runs AFTER
+-- this migration is applied.
+--
+-- Note: PostgreSQL does not allow ALTER TYPE ... ADD VALUE inside a
+-- transaction block in older versions. Supabase applies migrations
+-- individually via `supabase db push`, so this works.
+--
+-- Rollback (irreversible without manual intervention, but listed for
+-- reference):
+--   -- PostgreSQL has no DROP VALUE for enums. You would need to
+--   -- recreate the type and migrate all data.
+
+ALTER TYPE pairing_status ADD VALUE IF NOT EXISTS 'CONSUMED';

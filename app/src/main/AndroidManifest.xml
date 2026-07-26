@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+  <instrumentation
+      android:name="com.tudominio.parentalcontrol.MyHiltTestRunner"
+      android:targetPackage="com.tudominio.parentalcontrol" />
+
+  <!-- Permisos necesarios -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+      tools:ignore="ProtectedPermissions" />
+  
+  <!-- FCM Permissions -->
+  <uses-permission android:name="android.permission.VIBRATE" />
+  <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
+
+  <application
+    android:name="com.tudominio.parentalcontrol.ParentalControlApp"
+    android:allowBackup="true"
+    android:fullBackupContent="@xml/secure_storage_backup_rules"
+    android:icon="@mipmap/ic_launcher"
+    android:label="@string/app_name"
+    android:roundIcon="@mipmap/ic_launcher_round"
+    android:supportsRtl="true"
+    android:theme="@style/Theme.ParentalControl">
+
+    <activity
+      android:name=".MainActivity"
+      android:exported="true">
+
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+
+      <!-- PR 1: deeplink for child-side pairing — `parentalcontrol://pair?code=…` -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+
+        <data
+            android:scheme="parentalcontrol"
+            android:host="pair" />
+      </intent-filter>
+
+      <!-- T28: deeplink for "Pedir permiso" button in BlockOverlayService.
+           The overlay (a Service, not an Activity) can't navigate inside
+           the Compose graph directly; instead it fires this VIEW intent
+           and MainActivity picks it up to route to ExtraTimeScreen.
+           Optional query param `pkg=<package>` is informational context
+           for the screen (the grant is device-wide, see
+           TimeExtraRepository.createTimeRequest). -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+
+        <data
+            android:scheme="parentalcontrol"
+            android:host="request-extra-time" />
+      </intent-filter>
+
+      <!-- Continuation #2: deeplink for the parent magic-link round-trip —
+           `parentalcontrol://magic-link?token=<hash>&email=<addr>`.
+           Supabase dispatches the magic-link email; tapping it fires this
+           VIEW intent, MainActivity extracts the query params and the
+           NavGraph runs MagicLinkDeepLinkHandler → verifyMagicLinkOtp →
+           Dashboard. Mirrors the `pair` / `request-extra-time` filters. -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+
+        <data
+            android:scheme="parentalcontrol"
+            android:host="magic-link" />
+      </intent-filter>
+
+    </activity>
+
+      <service
+        android:name=".accessibility.AppMonitorService"
+        android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+        android:exported="false">
+        <meta-data
+            android:name="android.accessibilityservice"
+            android:resource="@xml/accessibility_service_config" />
+    </service>
+
+    <service
+        android:name=".service.MonitorForegroundService"
+        android:foregroundServiceType="specialUse"
+        android:exported="false">
+        <property
+            android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+            android:value="app_monitoring" />
+    </service>
+
+    <service
+        android:name=".overlay.BlockOverlayService"
+        android:exported="false"
+        android:foregroundServiceType="specialUse" />
+
+    <receiver
+        android:name=".admin.ParentalDeviceAdminReceiver"
+        android:exported="true"
+        android:permission="android.permission.BIND_DEVICE_ADMIN">
+        <meta-data
+            android:name="android.app.device_admin"
+            android:resource="@xml/device_admin_policies" />
+        <intent-filter>
+            <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+        </intent-filter>
+    </receiver>
+
+    <receiver
+        android:name=".receiver.BootReceiver"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="android.intent.action.BOOT_COMPLETED" />
+        </intent-filter>
+        <intent-filter>
+            <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+        </intent-filter>
+    </receiver>
+
+    <!-- FCM Service -->
+    <service
+        android:name=".push.FcmPushService"
+        android:exported="false">
+        <intent-filter>
+            <action android:name="com.google.firebase.MESSAGING_EVENT" />
+        </intent-filter>
+    </service>
+
+    <!--
+      Disable WorkManager auto-init so ParentalControlApp.workManagerConfiguration
+      (with HiltWorkerFactory) is consulted on first WorkManager.getInstance() call.
+      Without this override, androidx.work.WorkManagerInitializer runs at app start
+      via androidx.startup and uses the default Configuration, causing @HiltWorker
+      classes (SyncWorker, HeartbeatWorker, ReconciliationWorker) to fail with
+      NoSuchMethodException when instantiated by reflection.
+    -->
+    <provider
+        android:name="androidx.startup.InitializationProvider"
+        android:authorities="${applicationId}.androidx-startup"
+        android:exported="false"
+        tools:node="merge">
+        <meta-data
+            android:name="androidx.work.WorkManagerInitializer"
+            android:value="androidx.startup"
+            tools:node="remove" />
+    </provider>
+
+</application>
+
+</manifest>

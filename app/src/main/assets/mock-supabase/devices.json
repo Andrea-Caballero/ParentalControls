@@ -1,0 +1,38 @@
+[
+  {
+    "id": "dev-001",
+    "device_name": "Galaxy Tab S6 Lite",
+    "device_model": "SM-P610",
+    "os_version": "34",
+    "app_version": "1.0.0",
+    "device_state": "ACTIVE",
+    "policy_version": 3,
+    "last_seen_at": "2026-06-19T20:55:00Z",
+    "child_id": "child-lucas",
+    "child": {"id": "child-lucas", "first_name": "Lucas"}
+  },
+  {
+    "id": "dev-002",
+    "device_name": "Moto G32",
+    "device_model": "moto g32",
+    "os_version": "33",
+    "app_version": "1.0.0",
+    "device_state": "DOWNTIME",
+    "policy_version": 1,
+    "last_seen_at": "2026-06-19T20:58:00Z",
+    "child_id": null,
+    "child": null
+  },
+  {
+    "id": "dev-003",
+    "device_name": "Pixel 7a",
+    "device_model": "GWKK3",
+    "os_version": "35",
+    "app_version": "1.0.0",
+    "device_state": "LOCKED",
+    "policy_version": 7,
+    "last_seen_at": "2026-06-19T20:59:30Z",
+    "child_id": "child-sofia",
+    "child": {"id": "child-sofia", "first_name": "Sofía"}
+  }
+]

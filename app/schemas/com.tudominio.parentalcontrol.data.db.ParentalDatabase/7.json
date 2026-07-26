@@ -1,0 +1,371 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 7,
+    "identityHash": "b9bec61303acc66e5e3dedecfef4d034",
+    "entities": [
+      {
+        "tableName": "policy",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`device_id` TEXT NOT NULL, `version` INTEGER NOT NULL, `category_assignments` TEXT NOT NULL, PRIMARY KEY(`device_id`))",
+        "fields": [
+          {
+            "fieldPath": "device_id",
+            "columnName": "device_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category_assignments",
+            "columnName": "category_assignments",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "device_id"
+          ]
+        }
+      },
+      {
+        "tableName": "app_policies",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`device_id` TEXT NOT NULL, `package_name` TEXT NOT NULL, `state` TEXT NOT NULL, `daily_limit_minutes` INTEGER, `allowed_windows` TEXT NOT NULL, `category` TEXT, PRIMARY KEY(`device_id`, `package_name`))",
+        "fields": [
+          {
+            "fieldPath": "device_id",
+            "columnName": "device_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "package_name",
+            "columnName": "package_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "daily_limit_minutes",
+            "columnName": "daily_limit_minutes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "allowed_windows",
+            "columnName": "allowed_windows",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "device_id",
+            "package_name"
+          ]
+        }
+      },
+      {
+        "tableName": "grants",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `device_id` TEXT NOT NULL, `request_id` TEXT, `scope` TEXT NOT NULL, `minutes` INTEGER NOT NULL, `source` TEXT NOT NULL, `granted_at` TEXT NOT NULL, `expires_at` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "device_id",
+            "columnName": "device_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "request_id",
+            "columnName": "request_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "scope",
+            "columnName": "scope",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minutes",
+            "columnName": "minutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "granted_at",
+            "columnName": "granted_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expires_at",
+            "columnName": "expires_at",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "usage_today",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`package_name` TEXT NOT NULL, `server_date` TEXT NOT NULL, `usage_minutes` INTEGER NOT NULL, PRIMARY KEY(`package_name`, `server_date`))",
+        "fields": [
+          {
+            "fieldPath": "package_name",
+            "columnName": "package_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "server_date",
+            "columnName": "server_date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "usage_minutes",
+            "columnName": "usage_minutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "package_name",
+            "server_date"
+          ]
+        }
+      },
+      {
+        "tableName": "outbox",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `tipo` TEXT NOT NULL, `payload_json` TEXT NOT NULL, `dedup_key` TEXT, `retries` INTEGER NOT NULL, `created_at` TEXT NOT NULL, `server_date` TEXT NOT NULL, `processed` INTEGER NOT NULL, `processed_at` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tipo",
+            "columnName": "tipo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payload_json",
+            "columnName": "payload_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dedup_key",
+            "columnName": "dedup_key",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "retries",
+            "columnName": "retries",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created_at",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "server_date",
+            "columnName": "server_date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "processed",
+            "columnName": "processed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "processed_at",
+            "columnName": "processed_at",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "time_requests",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`request_id` TEXT NOT NULL, `device_id` TEXT NOT NULL, `package_name` TEXT, `minutes_requested` INTEGER NOT NULL, `reason` TEXT, `status` TEXT NOT NULL, `created_at` TEXT NOT NULL, `responded_at` TEXT, `parent_response` TEXT, PRIMARY KEY(`request_id`))",
+        "fields": [
+          {
+            "fieldPath": "request_id",
+            "columnName": "request_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "device_id",
+            "columnName": "device_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "package_name",
+            "columnName": "package_name",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "minutes_requested",
+            "columnName": "minutes_requested",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created_at",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "responded_at",
+            "columnName": "responded_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "parent_response",
+            "columnName": "parent_response",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "request_id"
+          ]
+        }
+      },
+      {
+        "tableName": "behavioral_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `event_type` TEXT NOT NULL, `event_version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, `client_ts` TEXT NOT NULL, `props` TEXT NOT NULL, `synced` INTEGER NOT NULL, `created_at` TEXT NOT NULL, `parent_id` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "event_type",
+            "columnName": "event_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "event_version",
+            "columnName": "event_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "device_id",
+            "columnName": "device_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "client_ts",
+            "columnName": "client_ts",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "props",
+            "columnName": "props",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "synced",
+            "columnName": "synced",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created_at",
+            "columnName": "created_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parentId",
+            "columnName": "parent_id",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b9bec61303acc66e5e3dedecfef4d034')"
+    ]
+  }
+}

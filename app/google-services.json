@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "748821767230",
+    "project_id": "parentalcontrol-80992",
+    "storage_bucket": "parentalcontrol-80992.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:748821767230:android:4e141a25d9c439c4355d6f",
+        "android_client_info": {
+          "package_name": "com.example.parentalcontrol"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHbYRd427cjhWediVsgB-Uk0DJGVm8qEg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:748821767230:android:866f8328d61266cc355d6f",
+        "android_client_info": {
+          "package_name": "com.tudominio.parentalcontrol"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHbYRd427cjhWediVsgB-Uk0DJGVm8qEg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

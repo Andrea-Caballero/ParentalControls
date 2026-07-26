@@ -1,0 +1,25 @@
+{
+  "device_id": "test-device-001",
+  "version": 1,
+  "device_state": "DOWNTIME",
+  "daily_screen_time_minutes": 240,
+  "schedules": [],
+  "category_limits": [],
+  "app_policies": [
+    {
+      "package_name": "com.example.app",
+      "state": "ALLOWED"
+    }
+  ],
+  "category_assignments": {},
+  "grants": [
+    {
+      "id": "grant-001",
+      "scope": "com.example.app",
+      "minutes": 60,
+      "source": "EXTRA_TIME",
+      "granted_at": "2026-06-04T10:00:00Z",
+      "expires_at": "2026-06-04T23:59:59Z"
+    }
+  ]
+}

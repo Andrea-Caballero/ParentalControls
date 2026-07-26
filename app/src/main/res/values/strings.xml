@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    T25: Divulgación + Consentimiento + Transparencia + Sistema de Copy
+    
+    §0.6: Divulgación prominente
+    - Dentro de la app
+    - Durante uso normal
+    - Describe datos de accesibilidad y su uso/compartición
+    - Acción afirmativa para consentir
+    - Separada de la política de privacidad
+    
+    Sistema de copy:
+    - Centralizado (origen único)
+    - Positivo y con motivo
+    - Variantes por edad (7-12, 13-17)
+    - Localizable
+-->
+<resources>
+    
+    <!-- ================================================================
+         APP INFO
+         ================================================================ -->
+    <string name="app_name">Control Parental</string>
+    <string name="app_purpose">Ayuda a tu familia a usar dispositivos de forma segura</string>
+    
+    <!-- Accessibility Service -->
+    <string name="accessibility_service_description">Control Parental monitorea el uso de apps para ayudarte a mantener hábitos saludables</string>
+    
+    <!-- Device Admin -->
+    <string name="device_admin_description">Permite bloquear el dispositivo cuando sea necesario para mantener hábitos saludables</string>
+    
+    <!-- ================================================================
+         DISCLOSURE - Divulgación Prominente (REQUIRED BY PLAY STORE)
+         ================================================================ -->
+    
+    <!-- Título principal de la divulgación -->
+    <string name="disclosure_title">Cómo funciona esta app</string>
+    <string name="disclosure_title_alt">Entendiendo el Control Parental</string>
+    
+    <!-- Subtítulo -->
+    <string name="disclosure_subtitle">Esta app necesita tu permiso para ayudarte</string>
+    <string name="disclosure_subtitle_alt">Lo que necesitas saber antes de empezar</string>
+    
+    <!-- Punto 1: Qué hace esta app -->
+    <string name="disclosure_point1_title">📱 Monitorea el uso de apps</string>
+    <string name="disclosure_point1_desc">Ve qué apps usa tu hijo y cuánto tiempo pasa en cada una. Esto incluye saber qué apps están abiertas y activas.</string>
+    
+    <!-- Punto 2: Acceso de accesibilidad -->
+    <string name="disclosure_point2_title">👁️ Usa acceso de accesibilidad</string>
+    <string name="disclosure_point2_desc">Para bloquear apps y mostrar avisos, esta app usa el permiso de Accesibilidad de Android. Esto permite detectar qué apps están en uso y actuar sobre ellas.</string>
+    
+    <!-- Punto 3: Qué información se comparte -->
+    <string name="disclosure_point3_title">📤 Comparte información con tus padres</string>
+    <string name="disclosure_point3_desc">Los datos de uso se guardan de forma segura y solo son visibles para tu familia. Nadie más puede ver esta información.</string>
+    
+    <!-- Punto 4: Sin modo oculto -->
+    <string name="disclosure_point4_title">🔓 Siempre visible</string>
+    <string name="disclosure_point4_desc">Esta app no tiene modo oculto. Siempre sabrás que está funcionando. Tú también puedes ver qué se comparte con tus padres.</string>
+    
+    <!-- Punto 5: Tus derechos -->
+    <string name="disclosure_point5_title">✅ Tú decides</string>
+    <string name="disclosure_point5_desc">Puedes pedir tiempo extra, reportar problemas y tus padres pueden ajustar o desactivar los controles en cualquier momento.</string>
+    
+    <!-- Consentimiento afirmativo -->
+    <string name="disclosure_consent_title">¿Entiendes cómo funciona?</string>
+    <string name="disclosure_consent_question">¿Aceptas que esta app monitoree el uso del dispositivo para ayudarte a mantener hábitos saludables?</string>
+    <string name="disclosure_consent_yes">Sí, acepto</string>
+    <string name="disclosure_consent_no">No, gracias</string>
+    <string name="disclosure_consent_note">Si no aceptas, la app no podrá funcionar. Puedes cambiar esta opción más adelante.</string>
+    
+    <!-- ================================================================
+         TRANSPARENCY - Qué se monitorea (siempre accesible)
+         ================================================================ -->
+    
+    <string name="transparency_title">Qué se comparte con tus padres</string>
+    <string name="transparency_subtitle">Siempre puedes ver esta información</string>
+    
+    <!-- Qué se monitorea -->
+    <string name="transparency_monitored_title">📊 Qué se monitorea</string>
+    <string name="transparency_apps_used">Apps que usas y cuánto tiempo</string>
+    <string name="transparency_screen_time">Tiempo total de pantalla al día</string>
+    <string name="transparency_blocked_attempts">Cuando intentas abrir una app bloqueada</string>
+    <string name="transparency_requests">Cuando pides tiempo extra</string>
+    
+    <!-- Qué NO se monitorea -->
+    <string name="transparency_not_monitored_title">🔒 Qué NO se monitorea</string>
+    <string name="transparency_not_messages">Mensajes que escribes o lees</string>
+    <string name="transparency_not_calls">Llamadas que haces o recibes</string>
+    <string name="transparency_not_browsing">Páginas web que visitas</string>
+    <string name="transparency_not_location">Tu ubicación</string>
+    <string name="transparency_not_camera">Lo que ves por la cámara</string>
+    <string name="transparency_not_microphone">Lo que dices (audio)</string>
+    
+    <!-- Privacidad -->
+    <string name="transparency_privacy_title">🔐 Tu privacidad</string>
+    <string name="transparency_privacy_desc">Tus datos están protegidos y solo los ve tu familia. No se venden ni se comparten con otras empresas.</string>
+    
+    <!-- Acceso -->
+    <string name="transparency_access_title">📱 Cómo acceder</string>
+    <string name="transparency_access_desc">Puedes ver esta información en cualquier momento desde el menú principal de la app.</string>
+    
+    <!-- ================================================================
+         COPY - Textos para el menor (origen único)
+         ================================================================ -->
+    
+    <!-- Variantes por edad -->
+    <string name="copy_age_7_12_prefix">[Para menores de 7-12 años]</string>
+    <string name="copy_age_13_17_prefix">[Para menores de 13-17 años]</string>
+    
+    <!-- HOME SCREEN - Pantalla principal del niño -->
+    <string name="home_welcome">¡Hola!</string>
+    <string name="home_time_remaining">Te quedan</string>
+    <string name="home_time_used">Ya usaste</string>
+    <string name="home_minutes">minutos</string>
+    <string name="home_hour">hora</string>
+    <string name="home_hours">horas</string>
+    <string name="home_of_today">de hoy</string>
+    
+    <!-- Tiempo extra -->
+    <string name="extra_time_title">Tiempo Extra</string>
+    <string name="extra_time_request">Pedir tiempo</string>
+    <string name="extra_time_granted">¡Tienes tiempo extra!</string>
+    <string name="extra_time_remaining">Te quedan %1$d minutos extra</string>
+    <string name="extra_time_used">Ya usaste %1$d minutos de tu tiempo extra</string>
+    <string name="extra_time_expired">Tu tiempo extra terminó</string>
+    <string name="extra_time_pending">Esperando aprobación…</string>
+    <string name="extra_time_denied">Solicitud rechazada</string>
+    
+    <!-- BLOCK SCREEN - Pantalla de bloqueo -->
+    <string name="block_title">App bloqueada</string>
+    <string name="block_title_alt">Momento de descanso</string>
+    <string name="block_message">Esta app está bloqueada ahora mismo</string>
+    <string name="block_message_alt">Puedes usar esta app más tarde</string>
+    <string name="block_time_remaining">Podrás usarla en %1$s</string>
+    <string name="block_request_time">¿Necesitas más tiempo?</string>
+    <string name="block_parent_contact">Hablar con tus padres</string>
+    
+    <!-- Solicitud de tiempo -->
+    <string name="request_time_title">Pedir tiempo extra</string>
+    <string name="request_time_how_much">¿Cuánto tiempo necesitas?</string>
+    <string name="request_time_minutes">%1$d minutos</string>
+    <string name="request_time_reason">¿Por qué?</string>
+    <string name="request_time_reason_placeholder">Ej: Tarea escolar, terminar un nivel…</string>
+    <string name="request_time_send">Enviar solicitud</string>
+    <string name="request_time_cancel">Cancelar</string>
+    <string name="request_time_sent">Solicitud enviada</string>
+    
+    <!-- APPS SCREEN - Apps disponibles -->
+    <string name="apps_title">Tus apps</string>
+    <string name="apps_all">Todas</string>
+    <string name="apps_allowed">Permitidas</string>
+    <string name="apps_blocked">Bloqueadas</string>
+    <string name="apps_usage_today">Hoy: %1$d min</string>
+    <string name="apps_no_usage">Sin uso hoy</string>
+    
+    <!-- STATUS SCREEN - Pantalla de estado del menor -->
+    <string name="status_title">Tu estado</string>
+    <string name="status_time_remaining_label">Te quedan</string>
+    <string name="status_time_remaining_unit">minutos</string>
+    <string name="status_time_used_today">%1$d / %2$d min hoy</string>
+    <string name="status_next_block_label">Próximo bloqueo</string>
+    <string name="status_next_block_until">Podrás usarlo hasta las %1$s</string>
+    <string name="status_next_block_tomorrow">Bloqueado hasta mañana</string>
+    <string name="status_warning_10_title">⏰ ¡Atención!</string>
+    <string name="status_warning_10_desc">Te quedan %1$d minutos</string>
+    <string name="status_warning_5_title">⚠️ ¡Se acaba el tiempo!</string>
+    <string name="status_warning_5_desc">Solo %1$d minutos restantes</string>
+    <string name="status_warning_blocked_title">🔒 Sin tiempo</string>
+    <string name="status_warning_blocked_desc">Has usado todo tu tiempo de hoy</string>
+    <string name="status_allowed_apps_title">Apps disponibles</string>
+    <string name="status_allowed_apps_more">+ más apps</string>
+    <string name="status_extra_time_button">Pedir tiempo extra</string>
+    <string name="status_extra_time_pending">Esperando aprobación…</string>
+    
+    <!-- SETTINGS - Configuración -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_profile">Tu perfil</string>
+    <string name="settings_transparency">Qué se comparte</string>
+    <string name="settings_help">Ayuda</string>
+    <string name="settings_about">Acerca de</string>
+    <string name="settings_logout">Salir</string>
+    
+    <!-- ================================================================
+         CONSENT - Gestión de consentimiento
+         ================================================================ -->
+    
+    <string name="consent_title">Consentimiento</string>
+    <string name="consent_required">Se requiere tu consentimiento</string>
+    <string name="consent_already_given">Consentimiento ya dado</string>
+    <string name="consent_withdrawn">Consentimiento retirado</string>
+    <string name="consent_change">Cambiar consentimiento</string>
+    
+    <!-- ================================================================
+         ONBOARDING - Flujo inicial
+         ================================================================ -->
+    
+    <string name="onboarding_welcome">¡Bienvenido!</string>
+    <string name="onboarding_setup">Configurar</string>
+    <string name="onboarding_next">Siguiente</string>
+    <string name="onboarding_skip">Omitir</string>
+    <string name="onboarding_done">Terminar</string>
+    
+    <!-- Pasos del onboarding -->
+    <string name="onboarding_step1_title">Te presentamos %1$s</string>
+    <string name="onboarding_step1_desc">Esta app te ayuda a mantener hábitos saludables con el teléfono.</string>
+    
+    <string name="onboarding_step2_title">Monitoreo de uso</string>
+    <string name="onboarding_step2_desc">Tus padres pueden ver cuánto tiempo usas cada app para ayudarte a organizarte mejor.</string>
+    
+    <string name="onboarding_step3_title">Límites de tiempo</string>
+    <string name="onboarding_step3_desc">Puedes tener tiempo limitado en algunas apps. ¡Pero siempre puedes pedir más si lo necesitas!</string>
+    
+    <string name="onboarding_step4_title">¡Listo!</string>
+    <string name="onboarding_step4_desc">Empieza a usar la app. Recuerda que siempre puedes ver qué se comparte con tus padres.</string>
+    
+    <!-- ================================================================
+         ERRORS - Mensajes de error
+         ================================================================ -->
+    
+    <string name="error_generic">Algo salió mal. Intenta de nuevo.</string>
+    <string name="error_network">Sin conexión a internet</string>
+    <string name="error_timeout">La conexión tardó demasiado</string>
+    <string name="error_server">Error del servidor</string>
+    
+    <!-- ================================================================
+         PERMISSIONS - Permisos
+         ================================================================ -->
+    
+    <string name="permission_title">Permisos necesarios</string>
+    <string name="permission_accessibility_title">Acceso de Accesibilidad</string>
+    <string name="permission_accessibility_desc">Necesitamos esto para detectar qué apps usas y bloquear las que no están permitidas.</string>
+    <string name="permission_overlay_title">Mostrar sobre otras apps</string>
+    <string name="permission_overlay_desc">Necesitamos esto para mostrarte mensajes cuando una app está bloqueada.</string>
+    <string name="permission_usage_title">Acceso al uso de apps</string>
+    <string name="permission_usage_desc">Necesitamos esto para saber cuánto tiempo usas cada app.</string>
+    <string name="permission_battery_title">Optimización de batería</string>
+    <string name="permission_battery_desc">Desactiva la optimización para que el control funcione correctamente.</string>
+    <string name="permission_grant">Dar permiso</string>
+    <string name="permission_skip">Omitir por ahora</string>
+     
+    <!-- ================================================================
+         REPAIR - Alertas de degradación y reparación (T30)
+         ================================================================ -->
+    
+    <string name="repair_alert_title">La protección necesita atención</string>
+    <string name="repair_alert_subtitle">Hay un problema que afecta el control parental</string>
+    <string name="repair_cause_title">Causa</string>
+    <string name="repair_cause_description">Descripción del problema</string>
+    <string name="repair_button">Reparar</string>
+    <string name="repair_dismiss_button">Más tarde</string>
+    <string name="repair_recovery_title">¡Listo!</string>
+    <string name="repair_recovery_message">La protección está funcionando correctamente</string>
+    
+    <string name="repair_accessibility_cause">Servicio de Accesibilidad desactivado</string>
+    <string name="repair_accessibility_desc">El servicio no está activo. Sin él, no se puede controlar qué apps están permitidas.</string>
+    
+    <string name="repair_overlay_cause">Permiso de Overlay revocado</string>
+    <string name="repair_overlay_desc">No se pueden mostrar mensajes de bloqueo sin este permiso.</string>
+    
+    <string name="repair_battery_cause">Optimización de batería activa</string>
+    <string name="repair_battery_desc">Esto puede causar que el control no funcione en segundo plano.</string>
+    
+    <string name="repair_usage_cause">Acceso a uso de apps desactivado</string>
+    <string name="repair_usage_desc">Necesario para saber cuánto tiempo usas cada app.</string>
+    
+    <string name="repair_admin_cause">Administrador de dispositivo inactivo</string>
+    <string name="repair_admin_desc">Sin esto, no se puede bloquear el dispositivo remotamente.</string>
+     
+</resources>

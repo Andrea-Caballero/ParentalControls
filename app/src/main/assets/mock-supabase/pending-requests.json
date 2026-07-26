@@ -1,0 +1,28 @@
+[
+  {
+    "id": "req-001",
+    "device_id": "dev-001",
+    "package_name": "com.instagram.android",
+    "app_name": "Instagram",
+    "minutes_requested": 15,
+    "reason": "Tarea terminada, quiero ver videos",
+    "status": "PENDING",
+    "created_at": "2026-06-19T20:50:00Z",
+    "responded_at": null,
+    "parent_response": null,
+    "devices": {"device_name": "Galaxy Tab S6 Lite"}
+  },
+  {
+    "id": "req-002",
+    "device_id": "dev-002",
+    "package_name": "com.whatsapp",
+    "app_name": "WhatsApp",
+    "minutes_requested": 30,
+    "reason": "Mensaje de la abuela",
+    "status": "PENDING",
+    "created_at": "2026-06-19T20:52:00Z",
+    "responded_at": null,
+    "parent_response": null,
+    "devices": {"device_name": "Moto G32"}
+  }
+]

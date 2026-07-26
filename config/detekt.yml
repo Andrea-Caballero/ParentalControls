@@ -1,0 +1,27 @@
+build:
+  maxIssues: 0
+  weights:
+    complexity: 2
+    formatting: 1
+
+detekt:
+  config:
+    validation: true
+
+formatting:
+  active: true
+  autoCorrect: true
+
+style:
+  MagicNumber:
+    active: false
+  StringLiteralDuplication:
+    active: true
+  FunctionMaxLength:
+    maxFunctionLength: 50
+
+naming:
+  PropertyNaming:
+    constantPattern: '^[A-Z][_A-Z0-9]*$'
+    variablePattern: '^[a-z][A-Za-z0-9]*$'
+    methodPattern: '^[a-z][A-Za-z0-9]*$'

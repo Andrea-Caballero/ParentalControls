@@ -1,0 +1,23 @@
+{
+  "device_id": "test-device-001",
+  "version": 1,
+  "device_state": "ACTIVE",
+  "daily_screen_time_minutes": 120,
+  "schedules": [],
+  "category_limits": [],
+  "app_policies": [
+    {
+      "package_name": "com.window.app",
+      "state": "ALLOWED",
+      "allowed_windows": [
+        {
+          "days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"],
+          "from": "14:00",
+          "to": "22:00"
+        }
+      ]
+    }
+  ],
+  "category_assignments": {},
+  "grants": []
+}

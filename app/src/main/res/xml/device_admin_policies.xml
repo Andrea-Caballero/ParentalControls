@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android"
+    android:icon="@drawable/ic_notification"
+    android:label="@string/app_name"
+    android:description="@string/device_admin_description">
+    <uses-policies>
+        <limit-password />
+        <watch-login />
+        <reset-password />
+        <force-lock />
+        <wipe-data />
+    </uses-policies>
+</device-admin>

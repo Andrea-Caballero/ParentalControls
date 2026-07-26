@@ -1,0 +1,57 @@
+[
+    {
+        "id": 1,
+        "event_type": "limit_reached",
+        "event_version": 1,
+        "device_id": "dev-001",
+        "client_ts": "2026-07-08T11:30:00Z",
+        "props": "{\"app\":\"com.instagram.android\",\"limit_minutes\":60,\"used_minutes\":60}",
+        "synced": true,
+        "created_at": "2026-07-08T11:30:00Z",
+        "parent_id": "parent-demo"
+    },
+    {
+        "id": 2,
+        "event_type": "time_warning_shown",
+        "event_version": 1,
+        "device_id": "dev-001",
+        "client_ts": "2026-07-08T11:00:00Z",
+        "props": "{\"app\":\"com.whatsapp\",\"minutes_remaining\":10}",
+        "synced": true,
+        "created_at": "2026-07-08T11:00:00Z",
+        "parent_id": "parent-demo"
+    },
+    {
+        "id": 3,
+        "event_type": "block_overlay_shown",
+        "event_version": 1,
+        "device_id": "dev-002",
+        "client_ts": "2026-07-08T09:45:00Z",
+        "props": "{\"app\":\"com.tiktok.android\",\"reason\":\"daily_limit_reached\"}",
+        "synced": true,
+        "created_at": "2026-07-08T09:45:00Z",
+        "parent_id": "parent-demo"
+    },
+    {
+        "id": 4,
+        "event_type": "limit_reached",
+        "event_version": 1,
+        "device_id": "dev-002",
+        "client_ts": "2026-07-07T19:20:00Z",
+        "props": "{\"app\":\"com.youtube.android\",\"limit_minutes\":30,\"used_minutes\":30}",
+        "synced": true,
+        "created_at": "2026-07-07T19:20:00Z",
+        "parent_id": "parent-demo"
+    },
+    {
+        "id": 5,
+        "event_type": "time_warning_shown",
+        "event_version": 1,
+        "device_id": "dev-001",
+        "client_ts": "2026-07-07T17:10:00Z",
+        "props": "{\"app\":\"com.instagram.android\",\"minutes_remaining\":5}",
+        "synced": true,
+        "created_at": "2026-07-07T17:10:00Z",
+        "parent_id": "parent-demo"
+    }
+]

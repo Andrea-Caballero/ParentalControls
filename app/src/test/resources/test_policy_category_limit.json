@@ -1,0 +1,24 @@
+{
+  "device_id": "test-device-001",
+  "version": 1,
+  "device_state": "ACTIVE",
+  "daily_screen_time_minutes": 120,
+  "schedules": [],
+  "category_limits": [
+    {
+      "category": "games",
+      "minutes": 60
+    }
+  ],
+  "app_policies": [
+    {
+      "package_name": "com.game.app",
+      "state": "ALLOWED",
+      "category": "games"
+    }
+  ],
+  "category_assignments": {
+    "com.game.app": "games"
+  },
+  "grants": []
+}

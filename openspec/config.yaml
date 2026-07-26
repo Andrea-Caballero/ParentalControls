@@ -1,0 +1,81 @@
+schema: spec-driven
+
+strict_tdd: true
+
+context: |
+  ParentalControl is an Android (Kotlin) app with Jetpack Compose UI, Hilt DI, Room persistence, Supabase backend (auth, postgrest, realtime, functions via Ktor client), Firebase Cloud Messaging, Play Integrity, Tink encrypted storage, DataStore preferences, WorkManager, CameraX, and ML Kit Barcode scanning.
+  Application id: com.example.parentalcontrol. minSdk 26, targetSdk 35, compileSdk 35. JVM target 17. Kotlin 2.0.21, AGP 8.5.2, Gradle 9.4.1, KSP 2.0.21-1.0.28, Hilt 2.52, Room 2.6.0, Compose BOM 2024.10.01, Ktor 2.3.4, Firebase BOM 32.1.1.
+  Architecture: feature packages (analytics, auth, consent, data, deviceowner, dnsfilter, enforcement, health, onboarding, overlay, pairing, push, realtime, reconciliation, reward, security, service, sync, workers, ui) with Hilt modules under di/. Single :app module. Local Room DB; remote Supabase via outbox + WorkManager sync.
+  Testing: JUnit 4, MockK, Turbine, Robolectric, kotlinx-coroutines-test, Room testing, Work testing, Ktor client-mock for unit tests. Espresso, AndroidX Test, Compose UI test, Hilt Android testing, Tink, DataStore for instrumented tests. Custom runner MyHiltTestRunner.
+  CI: GitHub Actions (.github/workflows/ci.yml) runs unit tests, instrumented tests on API 28/31/35, detekt, ktlintCheck, plus §0.6/§0.9 compliance checks. Java 17 in CI. The project has no git commits yet (fresh local repo on master).
+
+rules:
+  proposal:
+    require_problem_statement: true
+  spec:
+    require_acceptance_criteria: true
+  design:
+    require_tradeoffs: true
+  tasks:
+    protect_review_workload: true
+  apply:
+    test_command: "./gradlew testDebugUnitTest"
+    build_command: "./gradlew assembleDebug"
+    tdd: true
+  verify:
+    test_command: "./gradlew testDebugUnitTest"
+    build_command: "./gradlew assembleDebug"
+
+testing:
+  detected: "2026-06-16"
+  runner:
+    command: "./gradlew testDebugUnitTest"
+    framework: "Gradle / JUnit 4 / MockK / Turbine / Robolectric"
+  layers:
+    unit: "JVM (Robolectric for Android-framework deps; no emulator required)"
+    integration: "none (covered via Room in-memory + WorkManager test driver)"
+    e2e: "Instrumented on API 28/31/35 via connectedDebugAndroidTest"
+  commands:
+    unit:
+      - scope: "."
+        command: "./gradlew testDebugUnitTest"
+        framework: "Gradle test"
+      - scope: "."
+        command: "./gradlew test"
+        framework: "Gradle test (runs all variants)"
+    instrumented:
+      - scope: "."
+        command: "./gradlew connectedDebugAndroidTest"
+        framework: "Android instrumented tests (Espresso + Compose UI test)"
+    integration: []
+    e2e: []
+  coverage:
+    command: ""
+    commands: []
+    note: "No coverage plugin wired up (no kover/jaCoCo in build files). Add if needed."
+  gotchas:
+    - "This dev machine has no `adb` and no emulator — instrumented tests CANNOT run locally; they only run in CI on API 28/31/35 runners."
+    - "Gradle daemon JVM is JDK 21 locally, but Kotlin/AGP target JVM 17. CI uses Java 17 explicitly. Don't bump jvmTarget."
+    - "Custom testInstrumentationRunner: com.example.parentalcontrol.MyHiltTestRunner (Hilt-aware)."
+    - "Ktlint is disabled at the root project but ENABLED in :app; ./gradlew ktlintCheck is the gate."
+    - "Detekt config is minimal (buildUponDefaultConfig=true, allRules=false). Add detekt.yml if stricter rules are needed."
+
+quality:
+  lint: "./gradlew detekt"
+  lint_commands:
+    - scope: "."
+      command: "./gradlew detekt"
+      framework: "Detekt 1.23.1"
+    - scope: "."
+      command: "./gradlew ktlintCheck"
+      framework: "ktlint 11.0.0"
+    - scope: "."
+      command: "./gradlew lint"
+      framework: "Android Lint"
+  typecheck: ""
+  typecheck_commands: []
+  format: "./gradlew ktlintFormat"
+  format_commands:
+    - scope: "."
+      command: "./gradlew ktlintFormat"
+      framework: "ktlint 11.0.0"

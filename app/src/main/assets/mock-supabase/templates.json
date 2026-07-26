@@ -1,0 +1,17 @@
+[
+  {
+    "templateId": "tpl-preschool",
+    "name": "Preescolar (0-6 años)",
+    "policyJson": "{\"daily_limit_min\":30,\"bedtime\":\"20:00\",\"blocked_categories\":[\"games\",\"social\"],\"allowed_categories\":[\"education\"]}"
+  },
+  {
+    "templateId": "tpl-primary",
+    "name": "Escuela Primaria (7-12 años)",
+    "policyJson": "{\"daily_limit_min\":90,\"bedtime\":\"21:30\",\"blocked_categories\":[\"adult\"],\"allowed_categories\":[\"education\",\"games\",\"social\"]}"
+  },
+  {
+    "templateId": "tpl-teen",
+    "name": "Adolescencia (13-17 años)",
+    "policyJson": "{\"daily_limit_min\":180,\"bedtime\":\"22:30\",\"blocked_categories\":[\"adult\"],\"allowed_categories\":[\"education\",\"games\",\"social\",\"streaming\"]}"
+  }
+]

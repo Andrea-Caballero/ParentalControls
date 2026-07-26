@@ -1,0 +1,57 @@
+# Detekt Configuration - Minimal
+# T00: Static code analysis
+
+build:
+  maxIssues: 1000
+
+complexity:
+  active: true
+  ComplexCondition:
+    active: true
+    threshold: 4
+  LargeClass:
+    active: true
+    threshold: 300
+  LongMethod:
+    active: true
+    threshold: 60
+
+empty-blocks:
+  active: true
+  EmptyCatchBlock:
+    active: true
+  EmptyClassBlock:
+    active: true
+
+exceptions:
+  active: true
+  NotImplementedDeclaration:
+    active: true
+  PrintStackTrace:
+    active: true
+
+naming:
+  active: true
+  ClassNaming:
+    active: true
+    classPattern: '[A-Z][a-zA-Z0-9]*'
+  FunctionNaming:
+    active: true
+
+performance:
+  active: true
+
+potential-bugs:
+  active: true
+  ExplicitGarbageCollectionCall:
+    active: true
+  UnsafeCallOnNullableType:
+    active: true
+
+style:
+  active: true
+  EqualsNullCall:
+    active: true
+  MaxLineLength:
+    active: true
+    maxLineLength: 120

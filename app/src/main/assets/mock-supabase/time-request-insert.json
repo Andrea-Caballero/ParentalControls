@@ -1,0 +1,12 @@
+[
+  {
+    "id": "req-mock-insert-001",
+    "device_id": "dev-001",
+    "minutes_requested": 15,
+    "reason": "homework",
+    "status": "PENDING",
+    "created_at": "2026-07-17T20:50:00Z",
+    "responded_at": null,
+    "parent_response": null
+  }
+]

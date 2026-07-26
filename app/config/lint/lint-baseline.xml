@@ -1,0 +1,4099 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 8.9.2" type="baseline" client="gradle" dependencies="false" name="AGP (8.9.2)" variant="all" version="8.9.2">
+
+    <issue
+        id="Instantiatable"
+        message="`FcmPushService` must extend android.app.Service"
+        errorLine1="        android:name=&quot;.push.FcmPushService&quot;"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="105"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="BatteryLife"
+        message="Use of `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` violates the Play Store Content Policy regarding acceptable use cases, as described in https://developer.android.com/training/monitoring-device-state/doze-standby.html"
+        errorLine1="        return Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {"
+        errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/health/HealthChecker.kt"
+            line="270"
+            column="32"/>
+    </issue>
+
+    <issue
+        id="FullBackupContent"
+        message="Unexpected domain `keyset`, expected one of file, database, sharedpref, external, root, device_file, device_database, device_sharedpref, device_root"
+        errorLine1="        &lt;exclude domain=&quot;keyset&quot; path=&quot;parental_control_keyset&quot;/>"
+        errorLine2="                         ~~~~~~">
+        <location
+            file="src/main/res/xml/data_extraction_rules.xml"
+            line="6"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="FullBackupContent"
+        message="Unexpected domain `keyset`, expected one of file, database, sharedpref, external, root, device_file, device_database, device_sharedpref, device_root"
+        errorLine1="        &lt;exclude domain=&quot;keyset&quot; path=&quot;parental_control_keyset&quot;/>"
+        errorLine2="                         ~~~~~~">
+        <location
+            file="src/main/res/xml/data_extraction_rules.xml"
+            line="11"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="FullBackupContent"
+        message="Unexpected domain `keyset`, expected one of file, database, sharedpref, external, root, device_file, device_database, device_sharedpref, device_root"
+        errorLine1="    &lt;exclude domain=&quot;keyset&quot; path=&quot;parental_control_keyset&quot;/>"
+        errorLine2="                     ~~~~~~">
+        <location
+            file="src/main/res/xml/secure_storage_backup_rules.xml"
+            line="5"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="QueryPermissionsNeeded"
+        message="Consider adding a `&lt;queries>` declaration to your manifest when calling this method; see https://g.co/dev/packagevisibility for details"
+        errorLine1="                val resolved = pm.queryIntentActivities(intent, 0)"
+        errorLine2="                                  ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/ui/screen/apps/AppsViewModel.kt"
+            line="85"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="QueryPermissionsNeeded"
+        message="Consider adding a `&lt;queries>` declaration to your manifest when calling this method; see https://g.co/dev/packagevisibility for details"
+        errorLine1="        return intent.resolveActivity(packageManager) != null"
+        errorLine2="                      ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/health/HealthChecker.kt"
+            line="228"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="QueryPermissionsNeeded"
+        message="Consider adding a `&lt;queries>` declaration to your manifest when calling this method; see https://g.co/dev/packagevisibility for details"
+        errorLine1="        return intent.resolveActivity(packageManager) != null"
+        errorLine2="                      ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/reconciliation/UsageStatsReconciler.kt"
+            line="27"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="RemoveWorkManagerInitializer"
+        message="Remove androidx.work.WorkManagerInitializer from your AndroidManifest.xml when using on-demand initialization."
+        errorLine1="  &lt;application"
+        errorLine2="  ^">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="25"
+            column="3"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.application than 8.9.2 is available: 9.2.1. (There is also a newer version of 8.9.𝑥 available, if upgrading to 9.2.1 is difficult: 8.9.3)"
+        errorLine1="agp = &quot;8.9.2&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="2"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.application than 8.9.2 is available: 9.2.1. (There is also a newer version of 8.9.𝑥 available, if upgrading to 9.2.1 is difficult: 8.9.3)"
+        errorLine1="agp = &quot;8.9.2&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="2"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.application than 8.9.2 is available: 9.2.1. (There is also a newer version of 8.9.𝑥 available, if upgrading to 9.2.1 is difficult: 8.9.3)"
+        errorLine1="agp = &quot;8.9.2&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="2"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.android.gms:play-services-instantapps than 18.0.1 is available: 18.2.0"
+        errorLine1="    implementation(&quot;com.google.android.gms:play-services-instantapps:18.0.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="107"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.android.play:integrity than 1.3.0 is available: 1.6.0"
+        errorLine1="    implementation(&quot;com.google.android.play:integrity:1.3.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="108"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-process than 2.7.0 is available: 2.11.0"
+        errorLine1="    implementation(&quot;androidx.lifecycle:lifecycle-process:2.7.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="114"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of io.ktor:ktor-client-content-negotiation than 2.3.4 is available: 2.3.12"
+        errorLine1="    implementation(&quot;io.ktor:ktor-client-content-negotiation:2.3.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="123"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of io.ktor:ktor-serialization-kotlinx-json than 2.3.4 is available: 2.3.12"
+        errorLine1="    implementation(&quot;io.ktor:ktor-serialization-kotlinx-json:2.3.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="124"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of io.ktor:ktor-websockets than 2.3.4 is available: 2.3.12"
+        errorLine1="    implementation(&quot;io.ktor:ktor-websockets:2.3.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="125"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-process than 2.7.0 is available: 2.11.0"
+        errorLine1="    implementation(&quot;androidx.lifecycle:lifecycle-process:2.7.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="128"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose:compose-bom than 2026.05.00 is available: 2026.06.00"
+        errorLine1="compose-bom = &quot;2026.05.00&quot;"
+        errorLine2="              ~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="5"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose:compose-bom than 2026.05.00 is available: 2026.06.00"
+        errorLine1="compose-bom = &quot;2026.05.00&quot;"
+        errorLine2="              ~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="5"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose:compose-bom than 2026.05.00 is available: 2026.06.00"
+        errorLine1="compose-bom = &quot;2026.05.00&quot;"
+        errorLine2="              ~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="5"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.navigation:navigation-compose than 2.9.0 is available: 2.9.8"
+        errorLine1="navigation = &quot;2.9.0&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="6"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.navigation:navigation-compose than 2.9.0 is available: 2.9.8"
+        errorLine1="navigation = &quot;2.9.0&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="6"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.navigation:navigation-compose than 2.9.0 is available: 2.9.8"
+        errorLine1="navigation = &quot;2.9.0&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="6"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.9.0 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.9.0&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="7"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.9.0 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.9.0&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="7"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.9.0 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.9.0&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="7"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.9.0 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.9.0&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="7"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.9.0 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.9.0&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="7"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.9.0 is available: 2.11.0"
+        errorLine1="lifecycle = &quot;2.9.0&quot;"
+        errorLine2="            ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="7"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.16.0 is available: 1.19.0"
+        errorLine1="coreKtx = &quot;1.16.0&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="8"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.16.0 is available: 1.19.0"
+        errorLine1="coreKtx = &quot;1.16.0&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="8"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.16.0 is available: 1.19.0"
+        errorLine1="coreKtx = &quot;1.16.0&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="8"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.activity:activity-compose than 1.10.1 is available: 1.13.0"
+        errorLine1="activityCompose = &quot;1.10.1&quot;"
+        errorLine2="                  ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="9"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.activity:activity-compose than 1.10.1 is available: 1.13.0"
+        errorLine1="activityCompose = &quot;1.10.1&quot;"
+        errorLine2="                  ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="9"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.activity:activity-compose than 1.10.1 is available: 1.13.0"
+        errorLine1="activityCompose = &quot;1.10.1&quot;"
+        errorLine2="                  ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="9"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.dagger.hilt.android than 2.58 is available: 2.59.2"
+        errorLine1="hilt = &quot;2.58&quot;"
+        errorLine2="       ~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="10"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.dagger.hilt.android than 2.58 is available: 2.59.2"
+        errorLine1="hilt = &quot;2.58&quot;"
+        errorLine2="       ~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="10"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.dagger.hilt.android than 2.58 is available: 2.59.2"
+        errorLine1="hilt = &quot;2.58&quot;"
+        errorLine2="       ~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="10"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-compiler than 2.7.1 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="11"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-compiler than 2.7.1 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="11"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-compiler than 2.7.1 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="11"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-ktx than 2.7.1 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="11"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-ktx than 2.7.1 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="11"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-ktx than 2.7.1 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="11"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-runtime than 2.7.1 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="11"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-runtime than 2.7.1 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="11"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-runtime than 2.7.1 is available: 2.8.4"
+        errorLine1="room = &quot;2.7.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="11"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-runtime-ktx than 2.10.1 is available: 2.11.2"
+        errorLine1="work = &quot;2.10.1&quot;"
+        errorLine2="       ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="12"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-runtime-ktx than 2.10.1 is available: 2.11.2"
+        errorLine1="work = &quot;2.10.1&quot;"
+        errorLine2="       ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="12"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-runtime-ktx than 2.10.1 is available: 2.11.2"
+        errorLine1="work = &quot;2.10.1&quot;"
+        errorLine2="       ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="12"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.gms.google-services than 4.3.15 is available: 4.5.0"
+        errorLine1="google-services = { id = &quot;com.google.gms.google-services&quot;, version = &quot;4.3.15&quot; }"
+        errorLine2="                                                                     ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="24"
+            column="70"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.gms.google-services than 4.3.15 is available: 4.5.0"
+        errorLine1="google-services = { id = &quot;com.google.gms.google-services&quot;, version = &quot;4.3.15&quot; }"
+        errorLine2="                                                                     ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="24"
+            column="70"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.gms.google-services than 4.3.15 is available: 4.5.0"
+        errorLine1="google-services = { id = &quot;com.google.gms.google-services&quot;, version = &quot;4.3.15&quot; }"
+        errorLine2="                                                                     ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="24"
+            column="70"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.2.0 is available: 1.2.1"
+        errorLine1="datastore-preferences = &quot;androidx.datastore:datastore-preferences:1.2.0&quot;"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="56"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.2.0 is available: 1.2.1"
+        errorLine1="datastore-preferences = &quot;androidx.datastore:datastore-preferences:1.2.0&quot;"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="56"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.2.0 is available: 1.2.1"
+        errorLine1="datastore-preferences = &quot;androidx.datastore:datastore-preferences:1.2.0&quot;"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="56"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.3.0"
+        errorLine1="hilt-work = &quot;androidx.hilt:hilt-work:1.2.0&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="65"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.3.0"
+        errorLine1="hilt-work = &quot;androidx.hilt:hilt-work:1.2.0&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="65"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.3.0"
+        errorLine1="hilt-work = &quot;androidx.hilt:hilt-work:1.2.0&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="65"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-compiler than 1.2.0 is available: 1.3.0"
+        errorLine1="hilt-compiler = &quot;androidx.hilt:hilt-compiler:1.2.0&quot;"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="66"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-compiler than 1.2.0 is available: 1.3.0"
+        errorLine1="hilt-compiler = &quot;androidx.hilt:hilt-compiler:1.2.0&quot;"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="66"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-compiler than 1.2.0 is available: 1.3.0"
+        errorLine1="hilt-compiler = &quot;androidx.hilt:hilt-compiler:1.2.0&quot;"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="66"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.3.0"
+        errorLine1="hilt-navigation-compose = &quot;androidx.hilt:hilt-navigation-compose:1.2.0&quot;"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="67"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.3.0"
+        errorLine1="hilt-navigation-compose = &quot;androidx.hilt:hilt-navigation-compose:1.2.0&quot;"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="67"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.3.0"
+        errorLine1="hilt-navigation-compose = &quot;androidx.hilt:hilt-navigation-compose:1.2.0&quot;"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="67"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.security:security-crypto than 1.1.0-alpha06 is available: 1.1.0"
+        errorLine1="security-crypto = &quot;androidx.security:security-crypto:1.1.0-alpha06&quot;"
+        errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="71"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.security:security-crypto than 1.1.0-alpha06 is available: 1.1.0"
+        errorLine1="security-crypto = &quot;androidx.security:security-crypto:1.1.0-alpha06&quot;"
+        errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="71"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.security:security-crypto than 1.1.0-alpha06 is available: 1.1.0"
+        errorLine1="security-crypto = &quot;androidx.security:security-crypto:1.1.0-alpha06&quot;"
+        errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="71"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-serialization-json than 1.5.1 is available: 1.7.3"
+        errorLine1="kotlinx-serialization-json = { module = &quot;org.jetbrains.kotlinx:kotlinx-serialization-json&quot;, version = &quot;1.5.1&quot; }"
+        errorLine2="                                                                                                      ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="83"
+            column="103"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-serialization-json than 1.5.1 is available: 1.7.3"
+        errorLine1="kotlinx-serialization-json = { module = &quot;org.jetbrains.kotlinx:kotlinx-serialization-json&quot;, version = &quot;1.5.1&quot; }"
+        errorLine2="                                                                                                      ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="83"
+            column="103"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-serialization-json than 1.5.1 is available: 1.7.3"
+        errorLine1="kotlinx-serialization-json = { module = &quot;org.jetbrains.kotlinx:kotlinx-serialization-json&quot;, version = &quot;1.5.1&quot; }"
+        errorLine2="                                                                                                      ~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="83"
+            column="103"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.firebase:firebase-bom than 32.1.1 is available: 34.15.0"
+        errorLine1="firebase-bom = { module = &quot;com.google.firebase:firebase-bom&quot;, version = &quot;32.1.1&quot; }"
+        errorLine2="                                                                        ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="86"
+            column="73"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.firebase:firebase-bom than 32.1.1 is available: 34.15.0"
+        errorLine1="firebase-bom = { module = &quot;com.google.firebase:firebase-bom&quot;, version = &quot;32.1.1&quot; }"
+        errorLine2="                                                                        ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="86"
+            column="73"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.firebase:firebase-bom than 32.1.1 is available: 34.15.0"
+        errorLine1="firebase-bom = { module = &quot;com.google.firebase:firebase-bom&quot;, version = &quot;32.1.1&quot; }"
+        errorLine2="                                                                        ~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="86"
+            column="73"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.android.play:integrity than 1.1.0 is available: 1.6.0"
+        errorLine1="play-integrity = &quot;com.google.android.play:integrity:1.1.0&quot;"
+        errorLine2="                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="88"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.android.play:integrity than 1.1.0 is available: 1.6.0"
+        errorLine1="play-integrity = &quot;com.google.android.play:integrity:1.1.0&quot;"
+        errorLine2="                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="88"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.android.play:integrity than 1.1.0 is available: 1.6.0"
+        errorLine1="play-integrity = &quot;com.google.android.play:integrity:1.1.0&quot;"
+        errorLine2="                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="88"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-core than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-core = &quot;androidx.camera:camera-core:1.4.2&quot;"
+        errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="91"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-core than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-core = &quot;androidx.camera:camera-core:1.4.2&quot;"
+        errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="91"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-core than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-core = &quot;androidx.camera:camera-core:1.4.2&quot;"
+        errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="91"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-camera2 than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-camera2 = &quot;androidx.camera:camera-camera2:1.4.2&quot;"
+        errorLine2="                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="92"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-camera2 than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-camera2 = &quot;androidx.camera:camera-camera2:1.4.2&quot;"
+        errorLine2="                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="92"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-camera2 than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-camera2 = &quot;androidx.camera:camera-camera2:1.4.2&quot;"
+        errorLine2="                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="92"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-lifecycle than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-lifecycle = &quot;androidx.camera:camera-lifecycle:1.4.2&quot;"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="93"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-lifecycle than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-lifecycle = &quot;androidx.camera:camera-lifecycle:1.4.2&quot;"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="93"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-lifecycle than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-lifecycle = &quot;androidx.camera:camera-lifecycle:1.4.2&quot;"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="93"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-view than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-view = &quot;androidx.camera:camera-view:1.4.2&quot;"
+        errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="94"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-view than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-view = &quot;androidx.camera:camera-view:1.4.2&quot;"
+        errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="94"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-view than 1.4.2 is available: 1.6.1"
+        errorLine1="camera-view = &quot;androidx.camera:camera-view:1.4.2&quot;"
+        errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="94"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.mlkit:barcode-scanning than 17.1.0 is available: 17.3.0"
+        errorLine1="mlkit-barcode-scanning = &quot;com.google.mlkit:barcode-scanning:17.1.0&quot;"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="95"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.mlkit:barcode-scanning than 17.1.0 is available: 17.3.0"
+        errorLine1="mlkit-barcode-scanning = &quot;com.google.mlkit:barcode-scanning:17.1.0&quot;"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="95"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.mlkit:barcode-scanning than 17.1.0 is available: 17.3.0"
+        errorLine1="mlkit-barcode-scanning = &quot;com.google.mlkit:barcode-scanning:17.1.0&quot;"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="95"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test:core than 1.5.0 is available: 1.7.0"
+        errorLine1="androidx-test-core = &quot;androidx.test:core:1.5.0&quot;"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="102"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test:core than 1.5.0 is available: 1.7.0"
+        errorLine1="androidx-test-core = &quot;androidx.test:core:1.5.0&quot;"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="102"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test:core than 1.5.0 is available: 1.7.0"
+        errorLine1="androidx-test-core = &quot;androidx.test:core:1.5.0&quot;"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="102"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.3.0"
+        errorLine1="androidx-test-ext-junit = &quot;androidx.test.ext:junit:1.1.5&quot;"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="103"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.3.0"
+        errorLine1="androidx-test-ext-junit = &quot;androidx.test.ext:junit:1.1.5&quot;"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="103"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.3.0"
+        errorLine1="androidx-test-ext-junit = &quot;androidx.test.ext:junit:1.1.5&quot;"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="103"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test:runner than 1.5.2 is available: 1.7.0"
+        errorLine1="androidx-test-runner = &quot;androidx.test:runner:1.5.2&quot;"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="104"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test:runner than 1.5.2 is available: 1.7.0"
+        errorLine1="androidx-test-runner = &quot;androidx.test:runner:1.5.2&quot;"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="104"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test:runner than 1.5.2 is available: 1.7.0"
+        errorLine1="androidx-test-runner = &quot;androidx.test:runner:1.5.2&quot;"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="104"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test:rules than 1.5.0 is available: 1.7.0"
+        errorLine1="androidx-test-rules = &quot;androidx.test:rules:1.5.0&quot;"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="105"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test:rules than 1.5.0 is available: 1.7.0"
+        errorLine1="androidx-test-rules = &quot;androidx.test:rules:1.5.0&quot;"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="105"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test:rules than 1.5.0 is available: 1.7.0"
+        errorLine1="androidx-test-rules = &quot;androidx.test:rules:1.5.0&quot;"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="105"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.espresso:espresso-core than 3.6.0 is available: 3.7.0"
+        errorLine1="espresso-core = &quot;androidx.test.espresso:espresso-core:3.6.0&quot;"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="106"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.espresso:espresso-core than 3.6.0 is available: 3.7.0"
+        errorLine1="espresso-core = &quot;androidx.test.espresso:espresso-core:3.6.0&quot;"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="106"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.espresso:espresso-core than 3.6.0 is available: 3.7.0"
+        errorLine1="espresso-core = &quot;androidx.test.espresso:espresso-core:3.6.0&quot;"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="106"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose.ui:ui-test-junit4 than 1.6.0 is available: 1.11.3"
+        errorLine1="compose-ui-test-junit4 = &quot;androidx.compose.ui:ui-test-junit4:1.6.0&quot;"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="107"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose.ui:ui-test-junit4 than 1.6.0 is available: 1.11.3"
+        errorLine1="compose-ui-test-junit4 = &quot;androidx.compose.ui:ui-test-junit4:1.6.0&quot;"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="107"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose.ui:ui-test-junit4 than 1.6.0 is available: 1.11.3"
+        errorLine1="compose-ui-test-junit4 = &quot;androidx.compose.ui:ui-test-junit4:1.6.0&quot;"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="107"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose.ui:ui-test-manifest than 1.6.0 is available: 1.11.3"
+        errorLine1="compose-ui-test-manifest = &quot;androidx.compose.ui:ui-test-manifest:1.6.0&quot;"
+        errorLine2="                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="108"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose.ui:ui-test-manifest than 1.6.0 is available: 1.11.3"
+        errorLine1="compose-ui-test-manifest = &quot;androidx.compose.ui:ui-test-manifest:1.6.0&quot;"
+        errorLine2="                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="108"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose.ui:ui-test-manifest than 1.6.0 is available: 1.11.3"
+        errorLine1="compose-ui-test-manifest = &quot;androidx.compose.ui:ui-test-manifest:1.6.0&quot;"
+        errorLine2="                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="108"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-testing than 2.6.0 is available: 2.8.4"
+        errorLine1="room-testing = &quot;androidx.room:room-testing:2.6.0&quot;"
+        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="109"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-testing than 2.6.0 is available: 2.8.4"
+        errorLine1="room-testing = &quot;androidx.room:room-testing:2.6.0&quot;"
+        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="109"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-testing than 2.6.0 is available: 2.8.4"
+        errorLine1="room-testing = &quot;androidx.room:room-testing:2.6.0&quot;"
+        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="109"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-testing than 2.8.1 is available: 2.11.2"
+        errorLine1="work-testing = &quot;androidx.work:work-testing:2.8.1&quot;"
+        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="110"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-testing than 2.8.1 is available: 2.11.2"
+        errorLine1="work-testing = &quot;androidx.work:work-testing:2.8.1&quot;"
+        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="110"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-testing than 2.8.1 is available: 2.11.2"
+        errorLine1="work-testing = &quot;androidx.work:work-testing:2.8.1&quot;"
+        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="110"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.android.tools:desugar_jdk_libs than 2.0.3 is available: 2.1.5"
+        errorLine1="desugar = &quot;com.android.tools:desugar_jdk_libs:2.0.3&quot;"
+        errorLine2="          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="113"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.android.tools:desugar_jdk_libs than 2.0.3 is available: 2.1.5"
+        errorLine1="desugar = &quot;com.android.tools:desugar_jdk_libs:2.0.3&quot;"
+        errorLine2="          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="113"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.android.tools:desugar_jdk_libs than 2.0.3 is available: 2.1.5"
+        errorLine1="desugar = &quot;com.android.tools:desugar_jdk_libs:2.0.3&quot;"
+        errorLine2="          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/AndroidStudioProjects/ParentalControl/gradle/libs.versions.toml"
+            line="113"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.camera.core.ExperimentalGetImage` or `@OptIn(markerClass = androidx.camera.core.ExperimentalGetImage.class)`"
+        errorLine1="                                    if (mediaImage != null) {"
+        errorLine2="                                        ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/pairing/ui/PairingScreen.kt"
+            line="225"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.camera.core.ExperimentalGetImage` or `@OptIn(markerClass = androidx.camera.core.ExperimentalGetImage.class)`"
+        errorLine1="                                            mediaImage,"
+        errorLine2="                                            ~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/pairing/ui/PairingScreen.kt"
+            line="227"
+            column="45"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/ui/child/screens/BlockScreen.kt"
+            line="34"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/ui/child/components/RewardComponents.kt"
+            line="28"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="SwitchIntDef"
+        message="Switch statement on an `int` with known associated constant missing case `AccessibilityEvent.TYPE_ANNOUNCEMENT`, `AccessibilityEvent.TYPE_ASSIST_READING_CONTEXT`, `AccessibilityEvent.TYPE_GESTURE_DETECTION_END`, `AccessibilityEvent.TYPE_GESTURE_DETECTION_START`, `AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED`, `AccessibilityEvent.TYPE_SPEECH_STATE_CHANGE`, `AccessibilityEvent.TYPE_TOUCH_EXPLORATION_GESTURE_END`, `AccessibilityEvent.TYPE_TOUCH_EXPLORATION_GESTURE_START`, `AccessibilityEvent.TYPE_TOUCH_INTERACTION_END`, `AccessibilityEvent.TYPE_TOUCH_INTERACTION_START`, `AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED`, `AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUS_CLEARED`, `AccessibilityEvent.TYPE_VIEW_CLICKED`, `AccessibilityEvent.TYPE_VIEW_CONTEXT_CLICKED`, `AccessibilityEvent.TYPE_VIEW_FOCUSED`, `AccessibilityEvent.TYPE_VIEW_HOVER_ENTER`, `AccessibilityEvent.TYPE_VIEW_HOVER_EXIT`, `AccessibilityEvent.TYPE_VIEW_LONG_CLICKED`, `AccessibilityEvent.TYPE_VIEW_SCROLLED`, `AccessibilityEvent.TYPE_VIEW_SELECTED`, `AccessibilityEvent.TYPE_VIEW_TARGETED_BY_SCROLL`, `AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED`, `AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED`, `AccessibilityEvent.TYPE_VIEW_TEXT_TRAVERSED_AT_MOVEMENT_GRANULARITY`, `AccessibilityEvent.TYPE_WINDOWS_CHANGED`"
+        errorLine1="        when (event.eventType) {"
+        errorLine2="        ~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/security/AntiEvasionService.kt"
+            line="90"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. `R.foo.bar`) than by name (e.g. `getIdentifier(&quot;bar&quot;, &quot;foo&quot;, null)`)."
+        errorLine1="            val resId = resources.getIdentifier(stringId, &quot;string&quot;, context.packageName)"
+        errorLine2="                                  ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/copy/CopyManager.kt"
+            line="44"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. `R.foo.bar`) than by name (e.g. `getIdentifier(&quot;bar&quot;, &quot;foo&quot;, null)`)."
+        errorLine1="            val resId = resources.getIdentifier(stringId, &quot;string&quot;, context.packageName)"
+        errorLine2="                                  ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/copy/CopyManager.kt"
+            line="63"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="Typos"
+        message="&quot;momento&quot; is a common misspelling; did you mean &quot;memento&quot;?"
+        errorLine1="    &lt;string name=&quot;disclosure_point5_desc&quot;>Puedes pedir tiempo extra, reportar problemas y tus padres pueden ajustar o desactivar los controles en cualquier momento.&lt;/string>"
+        errorLine2="                                                                                                                                                            ^">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="62"
+            column="157"/>
+    </issue>
+
+    <issue
+        id="Typos"
+        message="&quot;momento&quot; is a common misspelling; did you mean &quot;memento&quot;?"
+        errorLine1="    &lt;string name=&quot;transparency_access_desc&quot;>Puedes ver esta información en cualquier momento desde el menú principal de la app.&lt;/string>"
+        errorLine2="                                                                                     ^">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="100"
+            column="86"/>
+    </issue>
+
+    <issue
+        id="Typos"
+        message="&quot;Momento&quot; is a common misspelling; did you mean &quot;Memento&quot;?"
+        errorLine1="    &lt;string name=&quot;block_title_alt&quot;>Momento de descanso&lt;/string>"
+        errorLine2="                                   ^">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="131"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;minutos&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;extra_time_remaining&quot;>Te quedan %1$d minutos extra&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="123"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;minutos&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;extra_time_used&quot;>Ya usaste %1$d minutos de tu tiempo extra&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="124"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;minutos&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;request_time_minutes&quot;>%1$d minutos&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="141"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;minutos&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;status_warning_10_desc&quot;>Te quedan %1$d minutos&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="165"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;minutos&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;status_warning_5_desc&quot;>Solo %1$d minutos restantes&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="167"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="TrustAllX509TrustManager"
+        message="`checkClientTrusted` is empty, which could cause insecure network traffic due to trusting arbitrary TLS/SSL certificates presented by peers"
+        errorLine1="            override fun checkClientTrusted(chain: Array&lt;out X509Certificate>?, authType: String?) {"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/security/network/TlsConfig.kt"
+            line="94"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="TrustAllX509TrustManager"
+        message="`checkServerTrusted` is empty, which could cause insecure network traffic due to trusting arbitrary TLS/SSL certificates presented by peers"
+        errorLine1="            override fun checkServerTrusted(chain: Array&lt;out X509Certificate>?, authType: String?) {"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/security/network/TlsConfig.kt"
+            line="98"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="CustomX509TrustManager"
+        message="Implementing a custom `X509TrustManager` is error-prone and likely to be insecure. It is likely to disable certificate validation altogether, and is non-trivial to implement correctly without calling Android&apos;s default implementation."
+        errorLine1="        return object : X509TrustManager {"
+        errorLine2="               ~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/security/network/TlsConfig.kt"
+            line="93"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="DataExtractionRules"
+        message="The attribute `android:fullBackupContent` is deprecated from Android 12 and higher and may be removed in future versions. Consider adding the attribute `android:dataExtractionRules` specifying an `@xml` resource which configures cloud backups and device transfers on Android 12 and higher."
+        errorLine1="    android:fullBackupContent=&quot;@xml/secure_storage_backup_rules&quot;"
+        errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="28"
+            column="32"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/overlay/BlockOverlayService.kt"
+            line="60"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/overlay/BlockOverlayService.kt"
+            line="164"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/receiver/BootReceiver.kt"
+            line="88"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/deviceowner/DeviceOwnerManager.kt"
+            line="263"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/deviceowner/DeviceOwnerManager.kt"
+            line="309"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/deviceowner/DeviceOwnerManager.kt"
+            line="361"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/deviceowner/DeviceOwnerManager.kt"
+            line="387"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/onboarding/OnboardingState.kt"
+            line="213"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/onboarding/OnboardingState.kt"
+            line="221"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 26"
+        errorLine1="                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/ui/repair/RepairViewModel.kt"
+            line="223"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `AnalyticsManager` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/analytics/AnalyticsManager.kt"
+            line="89"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="This field leaks a context object"
+        errorLine1="    private val context: Context"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/consent/ConsentViewModel.kt"
+            line="17"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `CopyManager` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/copy/CopyManager.kt"
+            line="23"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `DegradationAlertManager` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/health/DegradationAlertManager.kt"
+            line="24"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `DeviceAuthManager` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/auth/DeviceAuthManager.kt"
+            line="91"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `DeviceAuthService` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/auth/DeviceAuthService.kt"
+            line="27"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `DeviceOwnerManager` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/deviceowner/DeviceOwnerManager.kt"
+            line="30"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `DnsFilterManager` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/dnsfilter/DnsFilterManager.kt"
+            line="30"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `EnforcementController` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/enforcement/EnforcementController.kt"
+            line="46"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `HealthMonitor` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/health/HealthMonitor.kt"
+            line="23"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `IntegrityResponseHandler` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/security/integrity/IntegrityResponseHandler.kt"
+            line="28"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `OnboardingStateManager` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/onboarding/OnboardingState.kt"
+            line="48"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `PairingManager` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/pairing/PairingManager.kt"
+            line="36"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `PlayIntegrityManager` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/security/integrity/PlayIntegrityManager.kt"
+            line="36"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `RealtimeManager` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/realtime/RealtimeManager.kt"
+            line="36"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="This field leaks a context object"
+        errorLine1="    private val context: Context"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/realtime/RealtimeViewModel.kt"
+            line="20"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="This field leaks a context object"
+        errorLine1="    private val context: Context"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/ui/repair/RepairViewModel.kt"
+            line="25"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `SecureStorage` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/keystore/SecureStorage.kt"
+            line="23"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `SupabaseClientProvider` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/network/SupabaseClientProvider.kt"
+            line="33"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `SyncManager` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/sync/SyncManager.kt"
+            line="87"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `TamperDetector` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/security/TamperDetector.kt"
+            line="38"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `TimeExtraRepository` which has field `context` pointing to `Context`); this is a memory leak"
+        errorLine1="        @Volatile"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/data/repository/TimeExtraRepository.kt"
+            line="39"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="This field leaks a context object"
+        errorLine1="    private val context: Context"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/viewmodel/TimeExtraViewModel.kt"
+            line="29"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.xml.backup_rules` appears to be unused"
+        errorLine1="&lt;full-backup-content>"
+        errorLine2="^">
+        <location
+            file="src/main/res/xml/backup_rules.xml"
+            line="8"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.purple_200` appears to be unused"
+        errorLine1="    &lt;color name=&quot;purple_200&quot;>#FFBB86FC&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="3"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.purple_500` appears to be unused"
+        errorLine1="    &lt;color name=&quot;purple_500&quot;>#FF6200EE&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="4"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.purple_700` appears to be unused"
+        errorLine1="    &lt;color name=&quot;purple_700&quot;>#FF3700B3&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="5"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.teal_200` appears to be unused"
+        errorLine1="    &lt;color name=&quot;teal_200&quot;>#FF03DAC5&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="6"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.teal_700` appears to be unused"
+        errorLine1="    &lt;color name=&quot;teal_700&quot;>#FF018786&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="7"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.black` appears to be unused"
+        errorLine1="    &lt;color name=&quot;black&quot;>#FF000000&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="8"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.white` appears to be unused"
+        errorLine1="    &lt;color name=&quot;white&quot;>#FFFFFFFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="9"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.xml.data_extraction_rules` appears to be unused"
+        errorLine1="&lt;data-extraction-rules>"
+        errorLine2="^">
+        <location
+            file="src/main/res/xml/data_extraction_rules.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.mipmap.ic_launcher` appears to be unused">
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher.webp"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_launcher_background` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/ic_launcher_background.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.ic_launcher_foreground` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/ic_launcher_foreground.xml"
+            line="1"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.mipmap.ic_launcher_round` appears to be unused">
+        <location
+            file="src/main/res/mipmap-hdpi/ic_launcher_round.webp"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.app_purpose` appears to be unused"
+        errorLine1="    &lt;string name=&quot;app_purpose&quot;>Ayuda a tu familia a usar dispositivos de forma segura&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="24"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_title&quot;>Cómo funciona esta app&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="37"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_title_alt` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_title_alt&quot;>Entendiendo el Control Parental&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="38"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_subtitle` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_subtitle&quot;>Esta app necesita tu permiso para ayudarte&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="41"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_subtitle_alt` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_subtitle_alt&quot;>Lo que necesitas saber antes de empezar&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="42"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_point1_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_point1_title&quot;>📱 Monitorea el uso de apps&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="45"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_point1_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_point1_desc&quot;>Ve qué apps usa tu hijo y cuánto tiempo pasa en cada una. Esto incluye saber qué apps están abiertas y activas.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="46"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_point2_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_point2_title&quot;>👁️ Usa acceso de accesibilidad&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="49"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_point2_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_point2_desc&quot;>Para bloquear apps y mostrar avisos, esta app usa el permiso de Accesibilidad de Android. Esto permite detectar qué apps están en uso y actuar sobre ellas.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="50"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_point3_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_point3_title&quot;>📤 Comparte información con tus padres&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="53"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_point3_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_point3_desc&quot;>Los datos de uso se guardan de forma segura y solo son visibles para tu familia. Nadie más puede ver esta información.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="54"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_point4_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_point4_title&quot;>🔓 Siempre visible&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="57"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_point4_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_point4_desc&quot;>Esta app no tiene modo oculto. Siempre sabrás que está funcionando. Tú también puedes ver qué se comparte con tus padres.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="58"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_point5_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_point5_title&quot;>✅ Tú decides&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="61"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_point5_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_point5_desc&quot;>Puedes pedir tiempo extra, reportar problemas y tus padres pueden ajustar o desactivar los controles en cualquier momento.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="62"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_consent_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_consent_title&quot;>¿Entiendes cómo funciona?&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="65"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_consent_question` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_consent_question&quot;>¿Aceptas que esta app monitoree el uso del dispositivo para ayudarte a mantener hábitos saludables?&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="66"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_consent_yes` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_consent_yes&quot;>Sí, acepto&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="67"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_consent_no` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_consent_no&quot;>No, gracias&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="68"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.disclosure_consent_note` appears to be unused"
+        errorLine1="    &lt;string name=&quot;disclosure_consent_note&quot;>Si no aceptas, la app no podrá funcionar. Puedes cambiar esta opción más adelante.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="69"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_title&quot;>Qué se comparte con tus padres&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="75"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_subtitle` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_subtitle&quot;>Siempre puedes ver esta información&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="76"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_monitored_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_monitored_title&quot;>📊 Qué se monitorea&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="79"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_apps_used` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_apps_used&quot;>Apps que usas y cuánto tiempo&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="80"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_screen_time` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_screen_time&quot;>Tiempo total de pantalla al día&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="81"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_blocked_attempts` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_blocked_attempts&quot;>Cuando intentas abrir una app bloqueada&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="82"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_requests` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_requests&quot;>Cuando pides tiempo extra&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="83"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_not_monitored_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_not_monitored_title&quot;>🔒 Qué NO se monitorea&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="86"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_not_messages` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_not_messages&quot;>Mensajes que escribes o lees&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="87"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_not_calls` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_not_calls&quot;>Llamadas que haces o recibes&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="88"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_not_browsing` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_not_browsing&quot;>Páginas web que visitas&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="89"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_not_location` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_not_location&quot;>Tu ubicación&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="90"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_not_camera` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_not_camera&quot;>Lo que ves por la cámara&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="91"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_not_microphone` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_not_microphone&quot;>Lo que dices (audio)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="92"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_privacy_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_privacy_title&quot;>🔐 Tu privacidad&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="95"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_privacy_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_privacy_desc&quot;>Tus datos están protegidos y solo los ve tu familia. No se venden ni se comparten con otras empresas.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="96"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_access_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_access_title&quot;>📱 Cómo acceder&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="99"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.transparency_access_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;transparency_access_desc&quot;>Puedes ver esta información en cualquier momento desde el menú principal de la app.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="100"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.copy_age_7_12_prefix` appears to be unused"
+        errorLine1="    &lt;string name=&quot;copy_age_7_12_prefix&quot;>[Para menores de 7-12 años]&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="107"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.copy_age_13_17_prefix` appears to be unused"
+        errorLine1="    &lt;string name=&quot;copy_age_13_17_prefix&quot;>[Para menores de 13-17 años]&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="108"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_welcome` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_welcome&quot;>¡Hola!&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="111"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_time_remaining` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_time_remaining&quot;>Te quedan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="112"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_time_used` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_time_used&quot;>Ya usaste&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="113"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_minutes` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_minutes&quot;>minutos&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="114"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_hour` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_hour&quot;>hora&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="115"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_hours` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_hours&quot;>horas&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="116"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.home_of_today` appears to be unused"
+        errorLine1="    &lt;string name=&quot;home_of_today&quot;>de hoy&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="117"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.extra_time_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;extra_time_title&quot;>Tiempo Extra&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="120"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.extra_time_request` appears to be unused"
+        errorLine1="    &lt;string name=&quot;extra_time_request&quot;>Pedir tiempo&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="121"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.extra_time_granted` appears to be unused"
+        errorLine1="    &lt;string name=&quot;extra_time_granted&quot;>¡Tienes tiempo extra!&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="122"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.extra_time_remaining` appears to be unused"
+        errorLine1="    &lt;string name=&quot;extra_time_remaining&quot;>Te quedan %1$d minutos extra&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="123"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.extra_time_used` appears to be unused"
+        errorLine1="    &lt;string name=&quot;extra_time_used&quot;>Ya usaste %1$d minutos de tu tiempo extra&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="124"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.extra_time_expired` appears to be unused"
+        errorLine1="    &lt;string name=&quot;extra_time_expired&quot;>Tu tiempo extra terminó&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="125"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.extra_time_pending` appears to be unused"
+        errorLine1="    &lt;string name=&quot;extra_time_pending&quot;>Esperando aprobación…&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="126"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.extra_time_denied` appears to be unused"
+        errorLine1="    &lt;string name=&quot;extra_time_denied&quot;>Solicitud rechazada&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="127"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.block_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;block_title&quot;>App bloqueada&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="130"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.block_title_alt` appears to be unused"
+        errorLine1="    &lt;string name=&quot;block_title_alt&quot;>Momento de descanso&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="131"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.block_message` appears to be unused"
+        errorLine1="    &lt;string name=&quot;block_message&quot;>Esta app está bloqueada ahora mismo&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="132"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.block_message_alt` appears to be unused"
+        errorLine1="    &lt;string name=&quot;block_message_alt&quot;>Puedes usar esta app más tarde&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="133"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.block_time_remaining` appears to be unused"
+        errorLine1="    &lt;string name=&quot;block_time_remaining&quot;>Podrás usarla en %1$s&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="134"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.block_request_time` appears to be unused"
+        errorLine1="    &lt;string name=&quot;block_request_time&quot;>¿Necesitas más tiempo?&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="135"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.block_parent_contact` appears to be unused"
+        errorLine1="    &lt;string name=&quot;block_parent_contact&quot;>Hablar con tus padres&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="136"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.request_time_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;request_time_title&quot;>Pedir tiempo extra&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="139"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.request_time_how_much` appears to be unused"
+        errorLine1="    &lt;string name=&quot;request_time_how_much&quot;>¿Cuánto tiempo necesitas?&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="140"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.request_time_minutes` appears to be unused"
+        errorLine1="    &lt;string name=&quot;request_time_minutes&quot;>%1$d minutos&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="141"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.request_time_reason` appears to be unused"
+        errorLine1="    &lt;string name=&quot;request_time_reason&quot;>¿Por qué?&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="142"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.request_time_reason_placeholder` appears to be unused"
+        errorLine1="    &lt;string name=&quot;request_time_reason_placeholder&quot;>Ej: Tarea escolar, terminar un nivel…&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="143"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.request_time_send` appears to be unused"
+        errorLine1="    &lt;string name=&quot;request_time_send&quot;>Enviar solicitud&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="144"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.request_time_cancel` appears to be unused"
+        errorLine1="    &lt;string name=&quot;request_time_cancel&quot;>Cancelar&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="145"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.request_time_sent` appears to be unused"
+        errorLine1="    &lt;string name=&quot;request_time_sent&quot;>Solicitud enviada&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="146"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.apps_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;apps_title&quot;>Tus apps&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="149"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.apps_all` appears to be unused"
+        errorLine1="    &lt;string name=&quot;apps_all&quot;>Todas&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="150"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.apps_allowed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;apps_allowed&quot;>Permitidas&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="151"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.apps_blocked` appears to be unused"
+        errorLine1="    &lt;string name=&quot;apps_blocked&quot;>Bloqueadas&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="152"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.apps_usage_today` appears to be unused"
+        errorLine1="    &lt;string name=&quot;apps_usage_today&quot;>Hoy: %1$d min&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="153"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.apps_no_usage` appears to be unused"
+        errorLine1="    &lt;string name=&quot;apps_no_usage&quot;>Sin uso hoy&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="154"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_title&quot;>Tu estado&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="157"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_time_remaining_label` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_time_remaining_label&quot;>Te quedan&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="158"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_time_remaining_unit` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_time_remaining_unit&quot;>minutos&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="159"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_time_used_today` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_time_used_today&quot;>%1$d / %2$d min hoy&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="160"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_next_block_label` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_next_block_label&quot;>Próximo bloqueo&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="161"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_next_block_until` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_next_block_until&quot;>Podrás usarlo hasta las %1$s&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="162"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_next_block_tomorrow` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_next_block_tomorrow&quot;>Bloqueado hasta mañana&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="163"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_warning_10_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_warning_10_title&quot;>⏰ ¡Atención!&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="164"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_warning_10_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_warning_10_desc&quot;>Te quedan %1$d minutos&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="165"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_warning_5_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_warning_5_title&quot;>⚠️ ¡Se acaba el tiempo!&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="166"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_warning_5_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_warning_5_desc&quot;>Solo %1$d minutos restantes&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="167"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_warning_blocked_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_warning_blocked_title&quot;>🔒 Sin tiempo&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="168"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_warning_blocked_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_warning_blocked_desc&quot;>Has usado todo tu tiempo de hoy&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="169"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_allowed_apps_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_allowed_apps_title&quot;>Apps disponibles&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="170"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_allowed_apps_more` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_allowed_apps_more&quot;>+ más apps&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="171"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_extra_time_button` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_extra_time_button&quot;>Pedir tiempo extra&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="172"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.status_extra_time_pending` appears to be unused"
+        errorLine1="    &lt;string name=&quot;status_extra_time_pending&quot;>Esperando aprobación…&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="173"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_title&quot;>Ajustes&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="176"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_profile` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_profile&quot;>Tu perfil&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="177"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_transparency` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_transparency&quot;>Qué se comparte&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="178"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_help` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_help&quot;>Ayuda&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="179"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_about` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_about&quot;>Acerca de&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="180"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.settings_logout` appears to be unused"
+        errorLine1="    &lt;string name=&quot;settings_logout&quot;>Salir&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="181"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.consent_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;consent_title&quot;>Consentimiento&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="187"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.consent_required` appears to be unused"
+        errorLine1="    &lt;string name=&quot;consent_required&quot;>Se requiere tu consentimiento&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="188"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.consent_already_given` appears to be unused"
+        errorLine1="    &lt;string name=&quot;consent_already_given&quot;>Consentimiento ya dado&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="189"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.consent_withdrawn` appears to be unused"
+        errorLine1="    &lt;string name=&quot;consent_withdrawn&quot;>Consentimiento retirado&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="190"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.consent_change` appears to be unused"
+        errorLine1="    &lt;string name=&quot;consent_change&quot;>Cambiar consentimiento&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="191"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_welcome` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_welcome&quot;>¡Bienvenido!&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="197"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_setup` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_setup&quot;>Configurar&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="198"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_next` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_next&quot;>Siguiente&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="199"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_skip` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_skip&quot;>Omitir&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="200"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_done` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_done&quot;>Terminar&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="201"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_step1_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_step1_title&quot;>Te presentamos %1$s&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="204"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_step1_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_step1_desc&quot;>Esta app te ayuda a mantener hábitos saludables con el teléfono.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="205"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_step2_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_step2_title&quot;>Monitoreo de uso&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="207"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_step2_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_step2_desc&quot;>Tus padres pueden ver cuánto tiempo usas cada app para ayudarte a organizarte mejor.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="208"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_step3_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_step3_title&quot;>Límites de tiempo&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="210"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_step3_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_step3_desc&quot;>Puedes tener tiempo limitado en algunas apps. ¡Pero siempre puedes pedir más si lo necesitas!&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="211"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_step4_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_step4_title&quot;>¡Listo!&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="213"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_step4_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_step4_desc&quot;>Empieza a usar la app. Recuerda que siempre puedes ver qué se comparte con tus padres.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="214"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.error_generic` appears to be unused"
+        errorLine1="    &lt;string name=&quot;error_generic&quot;>Algo salió mal. Intenta de nuevo.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="220"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.error_network` appears to be unused"
+        errorLine1="    &lt;string name=&quot;error_network&quot;>Sin conexión a internet&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="221"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.error_timeout` appears to be unused"
+        errorLine1="    &lt;string name=&quot;error_timeout&quot;>La conexión tardó demasiado&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="222"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.error_server` appears to be unused"
+        errorLine1="    &lt;string name=&quot;error_server&quot;>Error del servidor&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="223"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.permission_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;permission_title&quot;>Permisos necesarios&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="229"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.permission_accessibility_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;permission_accessibility_title&quot;>Acceso de Accesibilidad&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="230"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.permission_accessibility_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;permission_accessibility_desc&quot;>Necesitamos esto para detectar qué apps usas y bloquear las que no están permitidas.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="231"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.permission_overlay_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;permission_overlay_title&quot;>Mostrar sobre otras apps&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="232"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.permission_overlay_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;permission_overlay_desc&quot;>Necesitamos esto para mostrarte mensajes cuando una app está bloqueada.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="233"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.permission_usage_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;permission_usage_title&quot;>Acceso al uso de apps&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="234"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.permission_usage_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;permission_usage_desc&quot;>Necesitamos esto para saber cuánto tiempo usas cada app.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="235"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.permission_battery_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;permission_battery_title&quot;>Optimización de batería&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="236"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.permission_battery_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;permission_battery_desc&quot;>Desactiva la optimización para que el control funcione correctamente.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="237"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.permission_grant` appears to be unused"
+        errorLine1="    &lt;string name=&quot;permission_grant&quot;>Dar permiso&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="238"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.permission_skip` appears to be unused"
+        errorLine1="    &lt;string name=&quot;permission_skip&quot;>Omitir por ahora&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="239"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_alert_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_alert_title&quot;>La protección necesita atención&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="245"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_alert_subtitle` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_alert_subtitle&quot;>Hay un problema que afecta el control parental&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="246"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_cause_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_cause_title&quot;>Causa&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="247"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_cause_description` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_cause_description&quot;>Descripción del problema&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="248"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_button` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_button&quot;>Reparar&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="249"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_dismiss_button` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_dismiss_button&quot;>Más tarde&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="250"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_recovery_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_recovery_title&quot;>¡Listo!&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="251"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_recovery_message` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_recovery_message&quot;>La protección está funcionando correctamente&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="252"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_accessibility_cause` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_accessibility_cause&quot;>Servicio de Accesibilidad desactivado&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="254"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_accessibility_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_accessibility_desc&quot;>El servicio no está activo. Sin él, no se puede controlar qué apps están permitidas.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="255"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_overlay_cause` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_overlay_cause&quot;>Permiso de Overlay revocado&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="257"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_overlay_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_overlay_desc&quot;>No se pueden mostrar mensajes de bloqueo sin este permiso.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="258"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_battery_cause` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_battery_cause&quot;>Optimización de batería activa&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="260"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_battery_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_battery_desc&quot;>Esto puede causar que el control no funcione en segundo plano.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="261"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_usage_cause` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_usage_cause&quot;>Acceso a uso de apps desactivado&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="263"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_usage_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_usage_desc&quot;>Necesario para saber cuánto tiempo usas cada app.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="264"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_admin_cause` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_admin_cause&quot;>Administrador de dispositivo inactivo&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="266"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.repair_admin_desc` appears to be unused"
+        errorLine1="    &lt;string name=&quot;repair_admin_desc&quot;>Sin esto, no se puede bloquear el dispositivo remotamente.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="267"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="TypographyDashes"
+        message="Replace &quot;-&quot; with an &quot;en dash&quot; character (–, &amp;#8211;) ?"
+        errorLine1="    &lt;string name=&quot;copy_age_7_12_prefix&quot;>[Para menores de 7-12 años]&lt;/string>"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="107"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="TypographyDashes"
+        message="Replace &quot;-&quot; with an &quot;en dash&quot; character (–, &amp;#8211;) ?"
+        errorLine1="    &lt;string name=&quot;copy_age_13_17_prefix&quot;>[Para menores de 13-17 años]&lt;/string>"
+        errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="108"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="MissingApplicationIcon"
+        message="Should explicitly set `android:icon`, there is no default"
+        errorLine1="  &lt;application"
+        errorLine2="   ~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="25"
+            column="4"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            android.net.Uri.parse(&quot;package:$packageName&quot;)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/overlay/BlockOverlayService.kt"
+            line="219"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            context.getSharedPreferences(&quot;device_auth_prefs&quot;, Context.MODE_PRIVATE)"
+        errorLine2="            ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/auth/DeviceAuthManager.kt"
+            line="232"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        context.getSharedPreferences(&quot;device_auth_prefs&quot;, Context.MODE_PRIVATE)"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/auth/DeviceAuthManager.kt"
+            line="303"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                context.getSharedPreferences(&quot;device_auth_prefs&quot;, Context.MODE_PRIVATE)"
+        errorLine2="                ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/auth/DeviceAuthManager.kt"
+            line="342"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        context.getSharedPreferences(&quot;device_auth_prefs&quot;, Context.MODE_PRIVATE)"
+        errorLine2="        ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/auth/DeviceAuthManager.kt"
+            line="377"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)"
+        errorLine2="            ^">
+        <location
+            file="src/main/java/com/example/parentalcontrol/push/FcmPushService.kt"
+            line="69"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            Uri.parse(&quot;package:${context.packageName}&quot;)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/health/HealthChecker.kt"
+            line="262"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            data = Uri.parse(&quot;package:${context.packageName}&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/health/HealthChecker.kt"
+            line="271"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                prefs.edit().putString(&quot;verification_log&quot;, existingLog + &quot;,&quot; + logEntry).apply()"
+        errorLine2="                ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/security/integrity/IntegrityResponseHandler.kt"
+            line="228"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            prefs.edit()"
+        errorLine2="            ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/security/integrity/IntegrityResponseHandler.kt"
+            line="243"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            prefs.edit().clear().apply()"
+        errorLine2="            ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/security/integrity/IntegrityResponseHandler.kt"
+            line="259"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                    Uri.parse(&quot;package:${ctx.packageName}&quot;)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/onboarding/OnboardingState.kt"
+            line="208"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putBoolean(&quot;onboarding_complete&quot;, true).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/onboarding/OnboardingState.kt"
+            line="268"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().clear().apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/onboarding/OnboardingState.kt"
+            line="277"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(&quot;current_step&quot;, step.name).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/onboarding/OnboardingState.kt"
+            line="298"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putStringSet(&quot;completed_steps&quot;, steps.map { it.name }.toSet()).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/onboarding/OnboardingState.kt"
+            line="309"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(KEY_DEVICES, array.toString()).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/data/local/PairedDevicesStore.kt"
+            line="100"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            Uri.parse(&quot;package:${context.packageName}&quot;)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/ui/screen/settings/PermissionHelper.kt"
+            line="29"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                    android.net.Uri.parse(&quot;package:${context.packageName}&quot;)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/ui/repair/RepairViewModel.kt"
+            line="214"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putLong(&quot;max_balance&quot;, maxMinutes).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/reward/RewardManager.kt"
+            line="126"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        sharedPreferences.edit().putString(KEY_PREFIX + key, encrypted).apply()"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/keystore/SecureStorage.kt"
+            line="94"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        sharedPreferences.edit().clear().apply()"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/keystore/SecureStorage.kt"
+            line="127"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putLong(&quot;last_request_time&quot;, time).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/parentalcontrol/data/repository/TimeExtraRepository.kt"
+            line="260"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;com.google.android.gms:play-services-instantapps:18.0.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="107"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead (com.google.android.play:integrity is already available as `play-integrity`, but using version 1.1.0 instead)"
+        errorLine1="    implementation(&quot;com.google.android.play:integrity:1.3.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="108"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;androidx.lifecycle:lifecycle-process:2.7.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="114"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use the existing version catalog reference (`libs.ktor.client.okhttp`) instead"
+        errorLine1="    implementation(&quot;io.ktor:ktor-client-okhttp:2.3.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="122"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;io.ktor:ktor-client-content-negotiation:2.3.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="123"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;io.ktor:ktor-serialization-kotlinx-json:2.3.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="124"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;io.ktor:ktor-websockets:2.3.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="125"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;androidx.lifecycle:lifecycle-process:2.7.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="128"
+            column="20"/>
+    </issue>
+
+</issues>

@@ -1,0 +1,13 @@
+{
+  "access_token": "mock-access-token-anonymous-session-001",
+  "refresh_token": "mock-refresh-token-anonymous-session-001",
+  "expires_in": 3600,
+  "expires_at": 9999999999,
+  "user": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "email": "anonymous@placeholder.local",
+    "app_metadata": {
+      "device_id": "device-anonymous-001"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+# ParentalControl local developer properties.
+#
+# This file is a template. Copy it to `local.properties` (which is
+# gitignored — see `.gitignore` lines 3 and 15) and adjust as needed.
+# Do NOT commit `local.properties` itself.
+
+# Supabase configuration. Replace the placeholders below with the values
+# from your Supabase project's API settings.
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+
+# Ktor MockEngine toggle for Supabase endpoints.
+#
+# When `true`, the parent dashboard's "devices" list is served by an
+# in-process Ktor MockEngine that reads fixture JSON from
+# `app/src/main/assets/mock-supabase/`. This lets you exercise the
+# parent flow without a real Supabase instance.
+#
+# Set to `false` (or leave unset) in production so the real engine is
+# bound and the placeholder Supabase config above stops masking real
+# auth/network errors.
+#
+# This value is read by Gradle (see `app/build.gradle.kts`) for the
+# `debug` build type only — release builds hardcode `false` regardless
+# of this file. If `USE_MOCK_SUPABASE` is not present here, Gradle
+# falls back to `gradle.properties`.
+#
+# Per design §D3 of `hotfix-parent-auth-session`, modified by
+# `hotfix-parent-auth-cta-reload`.
+USE_MOCK_SUPABASE=true

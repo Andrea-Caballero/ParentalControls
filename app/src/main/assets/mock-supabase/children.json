@@ -1,0 +1,16 @@
+[
+  {
+    "id": "child-lucas",
+    "parent_id": "parent-demo",
+    "first_name": "Lucas",
+    "created_at": "2026-06-01T00:00:00Z",
+    "updated_at": "2026-06-01T00:00:00Z"
+  },
+  {
+    "id": "child-sofia",
+    "parent_id": "parent-demo",
+    "first_name": "Sofía",
+    "created_at": "2026-06-01T00:00:00Z",
+    "updated_at": "2026-06-01T00:00:00Z"
+  }
+]

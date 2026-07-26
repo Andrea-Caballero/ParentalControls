@@ -1,0 +1,118 @@
+// App-level build.gradle configuration
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'org.jetbrains.kotlin.plugin.compose'
+    id 'com.google.devtools.ksp'
+    id 'com.google.dagger.hilt.android'
+    id 'com.google.gms.google-services'
+    id 'io.gitlab.arturbosch.detekt'
+    id 'org.jlleitschuh.gradle.ktlint'
+}
+
+android {
+    namespace 'com.example.parentalcontrol'
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.example.parentalcontrol"
+        minSdk = 26
+        targetSdk = 35
+        versionCode = 1
+        versionName = "1.0"
+
+        testInstrumentationRunner = "com.example.parentalcontrol.test.HiltTestRunner"
+    }
+
+    buildFeatures {
+        compose = true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.21"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled = true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    implementation platform(libs.compose.bom)
+    implementation libs.core.ktx
+    implementation libs.lifecycle.runtime.ktx
+    implementation libs.lifecycle.viewmodel.compose
+    implementation libs.activity.compose
+    implementation libs.compose.material3
+    debugImplementation libs.compose.ui.tooling
+    debugImplementation libs.compose.ui.tooling.preview
+
+    // Datos y Work
+    implementation libs.room.runtime
+    ksp libs.room.compiler
+    implementation libs.room.ktx
+    implementation libs.datastore.preferences
+    implementation libs.work.runtime.ktx
+
+    // Hilt
+    implementation(libs.hilt.android)
+
+    ksp(libs.hilt.android.compiler)
+
+    implementation(libs.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
+
+    // Criptografía
+    implementation libs.tink.android
+
+    // Red
+    implementation platform(libs.supabase.bom)
+
+    implementation libs.auth.kt
+    implementation libs.postgrest.kt
+    implementation libs.realtime.kt
+
+    implementation libs.ktor.client.okhttp
+    implementation libs.kotlinx.serialization.json
+
+    // Firebase
+    implementation platform(libs.firebase.bom)
+    implementation libs.firebase.messaging
+    implementation libs.play.integrity
+
+    // Escaneo
+    implementation libs.camera.core
+    implementation libs.camera.camera2
+    implementation libs.camera.lifecycle
+    implementation libs.camera.view
+    implementation libs.mlkit.barcode.scanning
+
+    // Tests
+    testImplementation libs.junit
+    testImplementation libs.mockk
+    testImplementation libs.turbine
+    testImplementation libs.robolectric
+    androidTestImplementation libs.androidx.test.core
+    androidTestImplementation libs.androidx.test.runner
+    androidTestImplementation libs.androidx.test.rules
+    androidTestImplementation libs.espresso.core
+    androidTestImplementation libs.compose.ui.test.junit4
+    debugImplementation libs.compose.ui.test.manifest
+    testImplementation libs.room.testing
+    testImplementation libs.work.testing
+    androidTestImplementation libs.hilt.android.testing
+    testImplementation libs.ktor.client.mock
+
+    coreLibraryDesugaring libs.desugar
+}

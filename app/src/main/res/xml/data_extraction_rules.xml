@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="secure_prefs.xml"/>
+        <exclude domain="database" path="secure_storage"/>
+        <exclude domain="keyset" path="parental_control_keyset"/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="secure_prefs.xml"/>
+        <exclude domain="database" path="secure_storage"/>
+        <exclude domain="keyset" path="parental_control_keyset"/>
+    </device-transfer>
+</data-extraction-rules>
