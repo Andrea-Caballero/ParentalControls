@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -51,6 +52,28 @@ class PairingViewModelAdminGateTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `child first name is sanitized and provided to pairing manager`() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val vm = PairingViewModel(context)
+
+        vm.updateChildFirstName("  Lucía_123! ")
+
+        assertEquals("Lucía", vm.childFirstName.value)
+        assertEquals("Lucía", PairingManager.getInstance(context).childFirstNameProvider())
+    }
+
+    @Test
+    fun `pairing actions remain idle without child first name`() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val vm = PairingViewModel(context)
+
+        vm.startQrPairing()
+        assertEquals(PairingUiState.Idle, vm.uiState.value)
+        vm.startManualPairing()
+        assertEquals(PairingUiState.Idle, vm.uiState.value)
     }
 
     @Test

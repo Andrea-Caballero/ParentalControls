@@ -82,6 +82,8 @@ fun PairingScreen(
         when (uiState) {
             is PairingUiState.Idle -> {
                 IdleContent(
+                    childFirstName = viewModel.childFirstName.collectAsState().value,
+                    onChildFirstNameChange = viewModel::updateChildFirstName,
                     onQrClick = { viewModel.startQrPairing() },
                     onCodeClick = { viewModel.startManualPairing() },
                     onCancel = onCancel
@@ -122,6 +124,8 @@ fun PairingScreen(
 
 @Composable
 private fun IdleContent(
+    childFirstName: String,
+    onChildFirstNameChange: (String) -> Unit,
     onQrClick: () -> Unit,
     onCodeClick: () -> Unit,
     onCancel: () -> Unit
@@ -155,10 +159,26 @@ private fun IdleContent(
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = childFirstName,
+            onValueChange = onChildFirstNameChange,
+            label = { Text("Nombre del niño") },
+            placeholder = { Text("Lucía") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Words,
+                imeAction = ImeAction.Next
+            )
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         Button(
             onClick = onQrClick,
+            enabled = childFirstName.isNotBlank(),
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) {
             Text("📷 Escanear código QR")
@@ -168,6 +188,7 @@ private fun IdleContent(
 
         OutlinedButton(
             onClick = onCodeClick,
+            enabled = childFirstName.isNotBlank(),
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) {
             Text("⌨️ Ingresar código manualmente")

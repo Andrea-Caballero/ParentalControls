@@ -33,6 +33,10 @@ class PairingViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<PairingUiState>(PairingUiState.Idle)
     val uiState: StateFlow<PairingUiState> = _uiState.asStateFlow()
 
+    // Nombre del niño asociado al dispositivo
+    private val _childFirstName = MutableStateFlow("")
+    val childFirstName: StateFlow<String> = _childFirstName.asStateFlow()
+
     // Código ingresado manualmente
     private val _manualCode = MutableStateFlow("")
     val manualCode: StateFlow<String> = _manualCode.asStateFlow()
@@ -55,13 +59,28 @@ class PairingViewModel @Inject constructor(
     private var lastScanTime: Long = 0
 
     init {
+        pairingManager.childFirstNameProvider = {
+            _childFirstName.value.trim().takeIf { it.isNotEmpty() }
+        }
         Log.d(TAG, "PairingViewModel inicializado")
+    }
+
+    /**
+     * Actualiza el nombre del niño con caracteres seguros para el backend.
+     */
+    fun updateChildFirstName(name: String) {
+        _childFirstName.value = name
+            .trim()
+            .filter { it.isLetter() || it == ' ' || it == '-' || it == '\'' }
+            .replace(Regex("\\s+"), " ")
+            .take(MAX_CHILD_FIRST_NAME_LENGTH)
     }
 
     /**
      * Inicia el emparejamiento con código QR.
      */
     fun startQrPairing() {
+        if (!hasChildFirstName()) return
         Log.d(TAG, "Iniciando emparejamiento por QR")
         _uiState.value = PairingUiState.ScanningQr
     }
@@ -70,9 +89,12 @@ class PairingViewModel @Inject constructor(
      * Inicia el emparejamiento con código manual.
      */
     fun startManualPairing() {
+        if (!hasChildFirstName()) return
         Log.d(TAG, "Iniciando emparejamiento manual")
         _uiState.value = PairingUiState.EnteringCode
     }
+
+    private fun hasChildFirstName(): Boolean = _childFirstName.value.isNotBlank()
 
     /**
      * Actualiza el código manual.
@@ -85,6 +107,7 @@ class PairingViewModel @Inject constructor(
      * Procesa el QR escaneado.
      */
     fun processQrCode(content: String) {
+        if (!hasChildFirstName()) return
         val currentTime = System.currentTimeMillis()
         
         // Evitar procesamiento duplicado (mismo código en 2 segundos)
@@ -143,6 +166,7 @@ class PairingViewModel @Inject constructor(
      * Empareja con el código manual.
      */
     fun pairWithManualCode() {
+        if (!hasChildFirstName()) return
         val code = _manualCode.value
         if (code.length < PairingManager.CODE_LENGTH) {
             _uiState.value = PairingUiState.Error(
@@ -278,6 +302,7 @@ class PairingViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "PairingViewModel"
+        private const val MAX_CHILD_FIRST_NAME_LENGTH = 80
     }
 }
 
