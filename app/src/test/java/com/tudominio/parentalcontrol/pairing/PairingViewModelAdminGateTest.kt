@@ -120,6 +120,21 @@ class PairingViewModelAdminGateTest {
     }
 
     @Test
+    fun `child first name provider is cleared on onCleared`() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val vm = newVm(context)
+
+        vm.updateChildFirstName("Lucía")
+        assertEquals("Lucía", PairingManager.getInstance(context).childFirstNameProvider())
+
+        val onCleared = PairingViewModel::class.java.getDeclaredMethod("onCleared")
+        onCleared.isAccessible = true
+        onCleared.invoke(vm)
+
+        assertNull(PairingManager.getInstance(context).childFirstNameProvider())
+    }
+
+    @Test
     fun `pairing actions remain idle without child first name`() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val vm = newVm(context)

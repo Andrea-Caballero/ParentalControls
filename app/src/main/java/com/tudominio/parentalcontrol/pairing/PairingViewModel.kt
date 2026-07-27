@@ -294,6 +294,11 @@ class PairingViewModel @Inject constructor(
         _uiState.value = PairingUiState.Idle
     }
 
+    override fun onCleared() {
+        pairingManager.childFirstNameProvider = { null }
+        super.onCleared()
+    }
+
     /**
      * Navega al escáner QR.
      */
