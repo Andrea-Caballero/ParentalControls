@@ -20,6 +20,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractBearerToken } from "../_shared/jwt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,14 +39,20 @@ export async function handleRequest(req: Request): Promise<Response> {
   }
 
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
+  if (authHeader === null) {
     return new Response(
       JSON.stringify({ error: "Token requerido" }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
-  const token = authHeader.replace("Bearer ", "");
+  const token = extractBearerToken(authHeader);
+  if (!token) {
+    return new Response(
+      JSON.stringify({ error: "Token inválido o expirado" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
   // Use ANON key with the caller's JWT forwarded as Authorization. RLS
   // (devices_parent_select: parent_id = auth.uid()) scopes the rows.

@@ -117,6 +117,26 @@ Deno.test("missing Authorization → 401 Token requerido", async () => {
   assertStringIncludes((await res.json()).error, "Token requerido");
 });
 
+Deno.test("malformed Authorization → 401 without calling Supabase Auth", async () => {
+  let fetchCalled = false;
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).fetch = () => {
+    fetchCalled = true;
+    return Promise.resolve(jsonResp({ error: "invalid_grant" }, 400));
+  };
+
+  const res = await handleRequest(
+    req(
+      { device_id: DEVICE_UUID, state: "LOCKED" },
+      { Authorization: "Basic test-jwt" },
+    ),
+  );
+
+  assertEquals(401, res.status);
+  assertEquals((await res.json()).error, "Token inválido o expirado");
+  assertEquals(fetchCalled, false);
+});
+
 Deno.test("non-owner parent → 403 (ownership RLS guard)", async () => {
   // deno-lint-ignore no-explicit-any
   (globalThis as any).fetch = buildFetch({

@@ -18,32 +18,14 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { decodeJwtPayload } from "../_shared/jwt.ts";
+import { errorMessage } from "../_shared/error.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
-
-function decodeJwtPayload(authHeader: string): Record<string, unknown> | null {
-  const match = authHeader.match(/^Bearer\s+(\S+)$/i);
-  if (!match) return null;
-
-  const segments = match[1].split(".");
-  if (segments.length !== 3 || !segments[1]) return null;
-
-  try {
-    const payload = segments[1].replace(/-/g, "+").replace(/_/g, "/");
-    const paddedPayload = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
-    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(paddedPayload)) return null;
-    const decoded = JSON.parse(atob(paddedPayload));
-    return decoded && typeof decoded === "object" && !Array.isArray(decoded)
-      ? decoded as Record<string, unknown>
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Handle an incoming request to the edge function. Exported so the
@@ -180,7 +162,7 @@ export async function handleRequest(req: Request): Promise<Response> {
       // contrato atómico, NINGÚN cambio de estado se persistió:
       // o la RPC commitea todo o nada. Devolvemos 500 sin enviar
       // FCM para no notificar al niño de un cambio que no ocurrió.
-      throw new Error(`Error en approve_request_atomic: ${rpcError.message}`);
+      throw new Error(`Error en approve_request_atomic: ${errorMessage(rpcError)}`);
     }
 
     // rpcResult es el jsonb devuelto por la función.
@@ -369,7 +351,7 @@ async function autoDenyStaleRequests(
       .eq("device_id", deviceId)
       .lt("created_at", oneHourAgo);
     if (error) {
-      console.error("autoDenyStaleRequests failed:", error.message);
+      console.error("autoDenyStaleRequests failed:", errorMessage(error));
     }
   } catch (e) {
     console.error("autoDenyStaleRequests threw:", e);

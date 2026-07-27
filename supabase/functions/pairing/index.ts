@@ -10,6 +10,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { errorMessage } from "../_shared/error.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -118,7 +119,7 @@ export async function handleRequest(req: Request): Promise<Response> {
       });
 
       if (createError || !newUser.user) {
-        throw new Error(`Error creando usuario: ${createError?.message}`);
+        throw new Error(`Error creando usuario: ${errorMessage(createError)}`);
       }
       agentUserId = newUser.user.id;
       createdAgentUser = true;
@@ -145,7 +146,7 @@ export async function handleRequest(req: Request): Promise<Response> {
       if (createdAgentUser) {
         await deleteAgentUser(supabaseAdmin, agentUserId);
       }
-      throw new Error(`Error completando pairing: ${redemptionError.message}`);
+      throw new Error(`Error completando pairing: ${errorMessage(redemptionError)}`);
     }
 
     const redemption = redemptionData as PairingRedemptionResult | null;
@@ -215,7 +216,7 @@ async function inspectPairingCode(supabase: any, code: string): Promise<PairingP
     .maybeSingle();
 
   if (error) {
-    throw new Error(`pairing preflight failed: ${error.message}`);
+    throw new Error(`pairing preflight failed: ${errorMessage(error)}`);
   }
   if (!data) {
     return { ok: false, httpStatus: 404, error: "INVALID_CODE" };
@@ -346,7 +347,7 @@ async function findAgentUserIdByEmail(supabase: any, email: string): Promise<str
       perPage: AGENT_LOOKUP_PAGE_SIZE,
     });
     if (error) {
-      throw new Error(`agent-user lookup failed: ${error.message}`);
+      throw new Error(`agent-user lookup failed: ${errorMessage(error)}`);
     }
     const users = (data?.users ?? []) as Array<{ id: string; email?: string }>;
     const match = users.find((u) => u.email === email);
