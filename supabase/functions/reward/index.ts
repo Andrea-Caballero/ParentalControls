@@ -9,13 +9,33 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function decodeJwtPayload(authHeader: string): Record<string, unknown> | null {
+  const match = authHeader.match(/^Bearer\s+(\S+)$/i);
+  if (!match) return null;
+
+  const segments = match[1].split(".");
+  if (segments.length !== 3 || !segments[1]) return null;
+
+  try {
+    const payload = segments[1].replace(/-/g, "+").replace(/_/g, "/");
+    const paddedPayload = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(paddedPayload)) return null;
+    const decoded = JSON.parse(atob(paddedPayload));
+    return decoded && typeof decoded === "object" && !Array.isArray(decoded)
+      ? decoded as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 // Topes por día para recompensas (configurable)
 const REWARD_LIMITS = {
   daily_max_minutes: 60, // Máximo 1 hora de recompensa por día
   weekly_max_minutes: 180, // Máximo 3 horas por semana
 };
 
-serve(async (req) => {
+export async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -29,9 +49,8 @@ serve(async (req) => {
       );
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const jwtPayload = JSON.parse(atob(token.split(".")[1]));
-    const parentId = jwtPayload.sub;
+    const jwtPayload = decodeJwtPayload(authHeader);
+    const parentId = jwtPayload?.sub;
 
     if (!parentId) {
       return new Response(
@@ -163,16 +182,22 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Reward error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Reward error:", message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+}
+
+if (import.meta.main) {
+  serve(handleRequest);
+}
 
 async function sendFcmToDevice(
-  supabase: ReturnType<typeof createClient>,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
   deviceId: string,
   payload: Record<string, unknown>
 ): Promise<void> {
@@ -184,7 +209,8 @@ async function sendFcmToDevice(
     .limit(1)
     .single();
 
-  if (!tokenRecord) {
+  const record = tokenRecord as { token?: string } | null;
+  if (!record?.token) {
     console.log("No FCM token for device:", deviceId);
     return;
   }
@@ -200,7 +226,7 @@ async function sendFcmToDevice(
         Authorization: `key=${serverKey}`,
       },
       body: JSON.stringify({
-        to: tokenRecord.token,
+        to: record.token,
         priority: "high",
         data: payload,
       }),
