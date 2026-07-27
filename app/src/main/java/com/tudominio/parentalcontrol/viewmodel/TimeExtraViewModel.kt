@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.tudominio.parentalcontrol.auth.DeviceAuthManager
 import com.tudominio.parentalcontrol.data.model.GrantEntity
 import com.tudominio.parentalcontrol.data.model.TimeRequestEntity
 import com.tudominio.parentalcontrol.data.repository.GrantResult
@@ -71,7 +72,15 @@ class TimeExtraViewModel(
         // pullApprovedRequests after a parent approve, which used to
         // require restarting the app for the UI to refresh).
         viewModelScope.launch {
-            repository.observeExtraTimeGrants().collect { grants ->
+            val deviceId = DeviceAuthManager.getInstance(context).deviceId.value
+            if (deviceId.isNullOrBlank()) {
+                // Pre-pair: nothing to observe yet, but the existing
+                // `_activeGrants.value = emptyList()` is the correct
+                // baseline. Skip the observe rather than emitting a
+                // cross-device mix.
+                return@launch
+            }
+            repository.observeExtraTimeGrants(deviceId).collect { grants ->
                 val now = timeProvider.wallInstant().toString()
                 val active = grants.filter { it.expires_at > now }
                 _activeGrants.value = active.map { it.toUi() }
@@ -90,8 +99,14 @@ class TimeExtraViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                // Cargar grants activos
-                val grants = repository.getActiveExtraTimeGrant()
+                val deviceId = DeviceAuthManager.getInstance(context).deviceId.value
+                if (deviceId.isNullOrBlank()) {
+                    _activeGrants.value = emptyList()
+                    _extraTimeAvailable.value = 0
+                    return@launch
+                }
+                // Cargar grants activos (scoped to this device).
+                val grants = repository.getActiveExtraTimeGrant(deviceId)
                 if (grants != null) {
                     _activeGrants.value = listOf(grants.toUi())
                     _extraTimeAvailable.value = calculateRemainingMinutes(grants)
@@ -99,7 +114,7 @@ class TimeExtraViewModel(
                     _activeGrants.value = emptyList()
                     _extraTimeAvailable.value = 0
                 }
-                
+
             } catch (e: Exception) {
                 _error.value = "Error sincronizando: ${e.message}"
             } finally {
@@ -110,19 +125,33 @@ class TimeExtraViewModel(
 
     /**
      * Envía solicitud de tiempo extra.
+     *
+     * Pulls the real device id from the [DeviceAuthManager] singleton (the
+     * device must be paired for the request to mean anything — the
+     * `time_requests.device_id` column is what the parent UI groups /
+     * filters by). If the device isn't paired yet we surface an
+     * [ExtraTimeRequestState.Error] instead of silently inserting an
+     * orphan row tagged with `""` like the previous version did.
      */
     fun sendRequest(minutes: Int, reason: String?) {
         viewModelScope.launch {
             _isLoading.value = true
             _requestSent.value = null
-            
+
             try {
+                val deviceId = DeviceAuthManager.getInstance(context).deviceId.value
+                if (deviceId.isNullOrBlank()) {
+                    _requestSent.value =
+                        ExtraTimeRequestState.Error("Device not paired")
+                    return@launch
+                }
+
                 val result = repository.createTimeRequest(
-                    deviceId = "", // Se llena desde el contexto
+                    deviceId = deviceId,
                     minutes = minutes,
                     reason = reason
                 )
-                
+
                 when (result) {
                     is TimeRequestResult.Success -> {
                         _requestSent.value = ExtraTimeRequestState.Success(result.requestId)
@@ -138,7 +167,7 @@ class TimeExtraViewModel(
                         _requestSent.value = ExtraTimeRequestState.Error(result.message)
                     }
                 }
-                
+
             } catch (e: Exception) {
                 _error.value = "Error enviando solicitud: ${e.message}"
                 _requestSent.value = ExtraTimeRequestState.Error(e.message ?: "Error desconocido")

@@ -74,6 +74,10 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "com.tudominio.parentalcontrol.MyHiltTestRunner"
+        // Shared-mock defaults are defined here so every build variant
+        // generates the fields. Debug can still override them below.
+        buildConfigField("boolean", "USE_SHARED_MOCK", "false")
+        buildConfigField("String", "SHARED_MOCK_URL", "\"http://10.0.2.2:8787\"")
     }
 
     buildFeatures {

@@ -2,6 +2,7 @@ package com.tudominio.parentalcontrol.data.repository
 
 import android.content.Context
 import android.util.Log
+import androidx.room.withTransaction
 import com.tudominio.parentalcontrol.data.db.ParentalDatabase
 import com.tudominio.parentalcontrol.data.model.GrantEntity
 import com.tudominio.parentalcontrol.data.model.TimeRequestEntity
@@ -18,7 +19,6 @@ import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 
 /**
  * Repositorio para manejar solicitudes de tiempo extra.
@@ -50,6 +50,16 @@ class TimeExtraRepository @Inject constructor(
         // Duración default del grant (30 minutos)
         private const val DEFAULT_GRANT_DURATION_MINUTES = 30L
 
+        // Status values written to `time_requests.status`. Keep these in
+        // sync with [com.tudominio.parentalcontrol.domain.model.RequestStatus]
+        // (PENDING / APPROVED / DENIED) — the [TimeRequestDao.getPendingRequestsFlow]
+        // query and the Supabase filter both expect UPPERCASE. The previous
+        // lowercase writes here silently orphaned new requests from the
+        // pending-list reactive flow.
+        private const val STATUS_PENDING = "PENDING"
+        private const val STATUS_APPROVED = "APPROVED"
+        private const val STATUS_DENIED = "DENIED"
+
         /**
          * Convenience accessor for non-Hilt call sites. Production code
          * inside `@AndroidEntryPoint` / `@HiltViewModel` should inject the
@@ -71,6 +81,16 @@ class TimeExtraRepository @Inject constructor(
      * Crea una solicitud de tiempo extra.
      *
      * Offline: encola en outbox para sync posterior.
+     *
+     * Atomicity contract: the local `time_requests` row and the
+     * matching `outbox` row commit together in a single
+     * `withTransaction` block. The throttle SharedPreferences stamp
+     * is bumped only AFTER the transaction commits, so a failure in
+     * either write rolls both back AND leaves the throttle
+     * untouched. The pre-fix code wrote the throttle before the
+     * enqueue, so an enqueue failure locked the user out of
+     * making another request for the next 5 minutes even though no
+     * request ever reached the device.
      */
     suspend fun createTimeRequest(
         deviceId: String,
@@ -98,35 +118,46 @@ class TimeExtraRepository @Inject constructor(
             package_name = null,
             minutes_requested = minutes,
             reason = reason ?: "",
-            status = "pending",
+            status = STATUS_PENDING,
             created_at = now.toString(),
             responded_at = null,
             parent_response = null
         )
 
-        try {
-            // Guardar localmente
-            timeRequestDao.insertRequest(request)
+        return try {
+            // Transactional pair: the local row and the outbox row
+            // commit together, or neither commits. The DAO insert
+            // and the outbox enqueue live in the same Room DB so a
+            // single `withTransaction` is sufficient to make them
+            // atomic from the consumer's point of view.
+            database.withTransaction {
+                timeRequestDao.insertRequest(request)
 
-            // Guardar throttle
-            saveLastRequestTime(now)
-
-            // Intentar enviar al servidor (offline-safe)
-            val enqueued = outboxManager.enqueueTimeRequest(request)
-
-            // Trigger an immediate one-shot OutboxDrainer so the parent sees
-            // the request within seconds, not at the next 15-min periodic
-            // tick. `enqueueUniqueWork(REPLACE)` collapses concurrent taps.
-            if (enqueued) {
-                WorkScheduler.scheduleOneTimeOutboxDrain(context)
+                val enqueued = outboxManager.enqueueTimeRequest(request)
+                if (!enqueued) {
+                    // Outbox enqueue is allowed to return false (e.g.,
+                    // dedup-key hit on a retry) — the local row is
+                    // then meaningless because the request was
+                    // already in the outbox. Roll back so the user
+                    // does not see a phantom PENDING row.
+                    throw IllegalStateException("Outbox enqueue returned false")
+                }
             }
 
-            Log.d(TAG, "Time request created: $requestId, enqueued=$enqueued")
+            // Both writes committed — bump the throttle AFTER the
+            // transaction. SharedPreferences are not transactional;
+            // writing inside the transaction would leak a stamp on
+            // rollback. Scheduling the one-shot drain lives here too
+            // so a failed enqueue never schedules a no-op drain.
+            saveLastRequestTime(now)
+            WorkScheduler.scheduleOneTimeOutboxDrain(context)
 
-            return TimeRequestResult.Success(requestId, isSent = enqueued)
+            Log.d(TAG, "Time request created: $requestId, enqueued=true")
+
+            TimeRequestResult.Success(requestId, isSent = true)
         } catch (e: Exception) {
             Log.e(TAG, "Error creating time request: ${e.message}")
-            return TimeRequestResult.Error(e.message ?: "Unknown error")
+            TimeRequestResult.Error(e.message ?: "Unknown error")
         }
     }
 
@@ -148,47 +179,76 @@ class TimeExtraRepository @Inject constructor(
      * Procesa una respuesta de aprobación.
      *
      * §0.4 paso 6: Crea grant idempotente con source='extra_time'.
+     *
+     * The request-status update and the grant insert are wrapped in a single
+     * Room `withTransaction { ... }` so they commit together or roll back
+     * together. Without the transaction boundary a crash between the two
+     * writes would leave the request marked APPROVED with no grant, or
+     * a grant created against a request still flagged PENDING — the
+     * classic two-writer divergence that the parent UI then has to
+     * reconcile on next boot.
+     *
+     * Goal 3 (request identity preservation): the local request is
+     * looked up via
+     * [com.tudominio.parentalcontrol.data.db.TimeRequestDao.getRequestByRequestIdOrServerId]
+     * so the same call resolves both the post-v9 reconciliation
+     * (server's id lives in `time_requests.server_id`) and the
+     * pre-v9 reconciliation (server's id was renamed into
+     * `time_requests.request_id`). The matched local id is what we
+     * stamp onto the resulting grant's `request_id` so the soft-FK
+     * stays consistent with the local primary key.
      */
     suspend fun processApproval(
         requestId: String,
         approvedMinutes: Int,
         expiresAt: Long? = null
     ): GrantResult {
-        try {
-            val request = timeRequestDao.getRequestById(requestId)
-                ?: return GrantResult.Error("Request not found")
-            val deviceId = request.device_id
+        return try {
+            database.withTransaction {
+                val request = timeRequestDao.getRequestByRequestIdOrServerId(requestId)
+                    ?: return@withTransaction GrantResult.Error("Request not found")
+                val localRequestId = request.request_id
+                val deviceId = request.device_id
 
-            timeRequestDao.updateRequestStatus(
-                requestId = requestId,
-                status = "approved",
-                respondedAt = timeProvider.wallInstant().toString()
-            )
+                timeRequestDao.updateRequestStatus(
+                    requestId = localRequestId,
+                    status = STATUS_APPROVED,
+                    respondedAt = timeProvider.wallInstant().toString()
+                )
 
-            // Crear grant idempotente (source='extra_time')
-            val grantId = "extra_time_$requestId"
-            val now = timeProvider.wallInstant()
-            val expires = expiresAt?.let { Instant.ofEpochMilli(it) } ?: now.plusSeconds(approvedMinutes * 60L)
+                // Crear grant idempotente (source='extra_time').
+                // The grant's request_id is the LOCAL primary key, not
+                // the server's id that the parent saw — the pre-v9
+                // reconciliation renamed request_id to match the
+                // server, so this branch is correct on both install
+                // paths. Post-v9 keeps request_id as the client id
+                // and writes the server's id to server_id; this
+                // branch is also correct on that path.
+                val grantId = "extra_time_$localRequestId"
+                val now = timeProvider.wallInstant()
+                val expires = expiresAt?.let { Instant.ofEpochMilli(it) }
+                    ?: now.plusSeconds(approvedMinutes * 60L)
 
-            val grant = GrantEntity(
-                id = grantId,
-                device_id = deviceId,
-                request_id = requestId,
-                scope = "extra_time",
-                minutes = approvedMinutes,
-                source = "extra_time",
-                granted_at = now.toString(),
-                expires_at = expires.toString()
-            )
+                val grant = GrantEntity(
+                    id = grantId,
+                    device_id = deviceId,
+                    request_id = localRequestId,
+                    scope = "extra_time",
+                    minutes = approvedMinutes,
+                    source = "extra_time",
+                    granted_at = now.toString(),
+                    expires_at = expires.toString()
+                )
 
-            grantDao.insertGrant(grant)
+                grantDao.insertGrant(grant)
 
-            Log.d(TAG, "Grant created from approval: $grantId, expires=$expires")
+                Log.d(TAG, "Grant created from approval: $grantId, expires=$expires")
 
-            return GrantResult.Success(grantId, expires)
+                GrantResult.Success(grantId, expires)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing approval: ${e.message}")
-            return GrantResult.Error(e.message ?: "Unknown error")
+            GrantResult.Error(e.message ?: "Unknown error")
         }
     }
 
@@ -199,7 +259,7 @@ class TimeExtraRepository @Inject constructor(
         try {
             timeRequestDao.updateRequestStatus(
                 requestId = requestId,
-                status = "denied",
+                status = STATUS_DENIED,
                 respondedAt = timeProvider.wallInstant().toString()
             )
             Log.d(TAG, "Request denied: $requestId")
@@ -210,38 +270,45 @@ class TimeExtraRepository @Inject constructor(
 
     /**
      * Verifica si el grant de tiempo extra está activo.
+     *
+     * Scoped to [deviceId] so two paired devices in the same family
+     * never see each other's grants. The pre-fix code queried the DAO
+     * with `scope` only — that returned every device's grants and
+     * surfaced a phantom "you have extra time" state on devices that
+     * had never asked for any.
      */
-    suspend fun hasActiveExtraTimeGrant(): Boolean {
+    suspend fun hasActiveExtraTimeGrant(deviceId: String): Boolean {
         val now = timeProvider.wallInstant().toString()
         return try {
-            val extraGrants = grantDao.getGrantsForScope("extra_time").first()
-            val rewardGrants = grantDao.getGrantsForScope("reward").first()
-            val allGrants = extraGrants + rewardGrants
-            allGrants.any { it.expires_at > now }
+            grantDao.getActiveGrantsForScopeOnce(deviceId, "extra_time", now).isNotEmpty() ||
+                grantDao.getActiveGrantsForScopeOnce(deviceId, "reward", now).isNotEmpty()
         } catch (e: Exception) {
             false
         }
     }
 
     /**
-     * Reactive stream of all `extra_time` grants in Room. The
-     * [TimeExtraViewModel] observes this so the home screen updates
-     * immediately when a new grant is created (e.g., by the
+     * Reactive stream of the calling device's `extra_time` grants in
+     * Room. The [TimeExtraViewModel] observes this so the home screen
+     * updates immediately when a new grant is created (e.g., by the
      * post-boot pullApprovedRequests after a parent approve).
+     *
+     * Scoped to [deviceId] — see [hasActiveExtraTimeGrant] for the
+     * cross-device rationale.
      */
-    fun observeExtraTimeGrants(): Flow<List<GrantEntity>> =
-        grantDao.getGrantsForScope("extra_time")
+    fun observeExtraTimeGrants(deviceId: String): Flow<List<GrantEntity>> =
+        grantDao.getGrantsForScopeFlow(deviceId, "extra_time")
 
     /**
      * Obtiene el grant de tiempo extra activo.
+     *
+     * Scoped to [deviceId]; see [hasActiveExtraTimeGrant].
      */
-    suspend fun getActiveExtraTimeGrant(): GrantEntity? {
+    suspend fun getActiveExtraTimeGrant(deviceId: String): GrantEntity? {
         val now = timeProvider.wallInstant().toString()
         return try {
-            val extraGrants = grantDao.getGrantsForScope("extra_time").first()
-            val rewardGrants = grantDao.getGrantsForScope("reward").first()
-            val allGrants = extraGrants + rewardGrants
-            allGrants.firstOrNull { it.expires_at > now }
+            grantDao.getActiveGrantsForScopeOnce(deviceId, "extra_time", now).firstOrNull()
+                ?: grantDao.getActiveGrantsForScopeOnce(deviceId, "reward", now).firstOrNull()
         } catch (e: Exception) {
             null
         }
@@ -249,17 +316,21 @@ class TimeExtraRepository @Inject constructor(
 
     /**
      * Obtiene el saldo total de tiempo extra (extra_time + rewards).
+     *
+     * Scoped to [deviceId]; see [hasActiveExtraTimeGrant]. The
+     * `expires_at > now` filter is now pushed into SQL so the DAO
+     * returns only the rows that actually contribute to the balance.
      */
-    suspend fun getTotalAvailableMinutes(): Long {
+    suspend fun getTotalAvailableMinutes(deviceId: String): Long {
         val now = timeProvider.wallInstant().toString()
         return try {
-            val extraGrants = grantDao.getGrantsForScope("extra_time").first()
-            val rewardGrants = grantDao.getGrantsForScope("reward").first()
-            val allGrants = extraGrants + rewardGrants
-
-            allGrants
-                .filter { it.expires_at > now }
-                .sumOf { it.minutes }.toLong()
+            val extraMinutes =
+                grantDao.getActiveGrantsForScopeOnce(deviceId, "extra_time", now)
+                    .sumOf { it.minutes }
+            val rewardMinutes =
+                grantDao.getActiveGrantsForScopeOnce(deviceId, "reward", now)
+                    .sumOf { it.minutes }
+            (extraMinutes + rewardMinutes).toLong()
         } catch (e: Exception) {
             0L
         }

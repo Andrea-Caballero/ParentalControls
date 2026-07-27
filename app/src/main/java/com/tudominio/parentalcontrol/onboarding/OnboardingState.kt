@@ -12,6 +12,7 @@ import com.tudominio.parentalcontrol.health.HealthChecker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Manager para el onboarding con progreso real.
@@ -351,7 +352,7 @@ sealed class OnboardingAnalyticsEvent {
  * Emisor de eventos de analytics.
  */
 object AnalyticsEmitter {
-    private val listeners = mutableListOf<(OnboardingAnalyticsEvent) -> Unit>()
+    private val listeners = CopyOnWriteArrayList<(OnboardingAnalyticsEvent) -> Unit>()
     
     fun emit(event: OnboardingAnalyticsEvent) {
         Log.d("Analytics", "Event: $event")

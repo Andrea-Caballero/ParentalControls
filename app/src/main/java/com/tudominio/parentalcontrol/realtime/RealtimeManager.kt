@@ -16,6 +16,7 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
@@ -73,6 +74,7 @@ class RealtimeManager private constructor(
     
     // Lifecyle observer
     private var lifecycleOwner: LifecycleOwner? = null
+    private val wsJson = Json { ignoreUnknownKeys = true }
 
     init {
         // Registrar como observer del lifecycle global
@@ -136,7 +138,7 @@ class RealtimeManager private constructor(
                 pingInterval = 30_000
             }
             install(ContentNegotiation) {
-                json(Json { ignoreUnknownKeys = true })
+                json(wsJson)
             }
         }
         
@@ -185,8 +187,7 @@ class RealtimeManager private constructor(
             payload = emptyMap(),
             ref = ref
         )
-        val jsonString = """{"type":"${message.type}","topic":"${message.topic}","event":"${message.event}","ref":"${message.ref}"}"""
-        send(Frame.Text(jsonString))
+        send(Frame.Text(wsJson.encodeToString(message)))
     }
 
 

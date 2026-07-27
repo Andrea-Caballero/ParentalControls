@@ -310,7 +310,13 @@ class ChildStatusViewModel @Inject constructor(
     private fun loadRewardBalance() {
         viewModelScope.launch {
             try {
-                val balance = rewardManager.getRewardBalance()
+                val deviceId = authManager.deviceId.value
+                if (deviceId.isNullOrBlank()) {
+                    _rewardBalance.value = 0L
+                    _lastKnownRewardBalance = 0L
+                    return@launch
+                }
+                val balance = rewardManager.getRewardBalance(deviceId)
                 _rewardBalance.value = balance
 
                 if (balance > _lastKnownRewardBalance && _lastKnownRewardBalance > 0) {

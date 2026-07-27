@@ -27,6 +27,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
@@ -172,25 +173,53 @@ class MonitorForegroundService : Service() {
         }
     }
 
+    /**
+     * Check the warning thresholds for the package currently in the
+     * foreground and emit the limit notifications on a one-shot basis.
+     *
+     * Important: this is invoked from the per-tick [startTicking] loop on
+     * `Dispatchers.Default`, so it MUST return within a bounded amount of
+     * time or the tick loop will stall.
+     *
+     * The previous implementation called [collectLatest] on the usage
+     * flow, which never returns for a hot StateFlow — so the first
+     * invocation of `updateUsage()` suspended indefinitely inside
+     * `checkWarnings()` and the per-tick loop never advanced past tick
+     * 0. The fix uses [first] to read the current value once per tick,
+     * which is exactly what the design calls for: re-evaluate the
+     * threshold against the latest usage snapshot on every tick.
+     */
     private suspend fun checkWarnings() {
         val packageName = currentPackage ?: return
         val serverDate = timeProvider.currentDate().toString()
         val limit = dailyLimitMinutes.value
 
-        database.usageDao().getUsageForPackageFlow(packageName, serverDate).collectLatest { usageMinutes ->
-            usageMinutes?.let { used ->
-                val remainingMinutes = (limit - used).coerceAtLeast(0)
+        val usageMinutes = database.usageDao()
+            .getUsageForPackageFlow(packageName, serverDate)
+            .first()
 
-                if (remainingMinutes <= WARNING_THRESHOLD_10 && !warned10Minutes) {
-                    sendWarningNotification(10)
-                    warned10Minutes = true
-                }
+        applyWarningThresholds(usageMinutes, limit)
+    }
 
-                if (remainingMinutes <= WARNING_THRESHOLD_5 && !warned5Minutes) {
-                    sendWarningNotification(5)
-                    warned5Minutes = true
-                }
-            }
+    /**
+     * Pure decision branch extracted from [checkWarnings] so the
+     * threshold logic is unit-testable without driving the full
+     * `getUsageForPackageFlow` flow. The `warned10Minutes` /
+     * `warned5Minutes` latch state is still mutated here so the
+     * once-per-day notification contract is preserved.
+     */
+    private fun applyWarningThresholds(usedMinutes: Int?, limitMinutes: Int) {
+        if (usedMinutes == null) return
+        val remainingMinutes = (limitMinutes - usedMinutes).coerceAtLeast(0)
+
+        if (remainingMinutes <= WARNING_THRESHOLD_10 && !warned10Minutes) {
+            sendWarningNotification(10)
+            warned10Minutes = true
+        }
+
+        if (remainingMinutes <= WARNING_THRESHOLD_5 && !warned5Minutes) {
+            sendWarningNotification(5)
+            warned5Minutes = true
         }
     }
 

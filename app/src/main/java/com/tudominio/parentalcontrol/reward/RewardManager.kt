@@ -64,16 +64,20 @@ class RewardManager @Inject constructor(
 
     /**
      * Obtiene el saldo total de recompensas disponibles.
+     *
+     * Scoped to [deviceId] so two paired devices in the same family
+     * never see each other's rewards. The pre-fix code queried the DAO
+     * with `scope` only — that summed grants across every paired device
+     * and surfaced a phantom balance on devices that had never earned
+     * any reward time.
      */
-    suspend fun getRewardBalance(): Long {
+    suspend fun getRewardBalance(deviceId: String): Long {
         val now = timeProvider.wallInstant().toString()
         val maxBalance = getMaxBalanceMinutes()
 
         return try {
-            val grants = grantDao.getGrantsForScope(REWARD_SCOPE).first()
-            val activeGrants = grants.filter { it.expires_at > now }
-
-            val totalMinutes = activeGrants.sumOf { it.minutes }.toLong()
+            val grants = grantDao.getActiveGrantsForScopeOnce(deviceId, REWARD_SCOPE, now)
+            val totalMinutes = grants.sumOf { it.minutes }.toLong()
             minOf(totalMinutes, maxBalance)
         } catch (e: Exception) {
             Log.e(TAG, "Error getting reward balance: ${e.message}")
@@ -83,11 +87,20 @@ class RewardManager @Inject constructor(
 
     /**
      * Obtiene todos los grants de recompensa activos.
+     *
+     * Scoped to [deviceId]; see [getRewardBalance] for the
+     * cross-device rationale.
+     *
+     * Uses the unfiltered deviceId+scope Flow plus an in-memory
+     * `expires_at > now` filter so the wall-clock is re-evaluated on
+     * every emission. The pre-fix code did the same staleness-recovery
+     * trick; switching to a SQL-bound `:now` parameter would freeze
+     * the cutoff at subscription time and silently keep an expired
+     * grant in the list until the next table change.
      */
-    fun getActiveRewardGrants(): Flow<List<RewardGrantUi>> {
-        val now = timeProvider.wallInstant().toString()
-
-        return grantDao.getGrantsForScope(REWARD_SCOPE).map { grants ->
+    fun getActiveRewardGrants(deviceId: String): Flow<List<RewardGrantUi>> {
+        return grantDao.getGrantsForScopeFlow(deviceId, REWARD_SCOPE).map { grants ->
+            val now = timeProvider.wallInstant().toString()
             grants.filter { it.expires_at > now }
                 .sortedBy { it.expires_at }
                 .map { it.toUi() }
@@ -96,12 +109,21 @@ class RewardManager @Inject constructor(
 
     /**
      * Obtiene el historial de recompensas.
+     *
+     * Scoped to [deviceId]; see [getRewardBalance]. Note: this returns
+     * ALL grants (including expired ones) for the requested device so
+     * the UI can show the past timeline. Expired rows are flagged via
+     * [RewardHistoryItem.isExpired] rather than filtered out.
      */
-    suspend fun getRewardHistory(): List<RewardHistoryItem> {
-        val now = timeProvider.wallInstant().toString()
-
+    suspend fun getRewardHistory(deviceId: String): List<RewardHistoryItem> {
         return try {
-            val grants = grantDao.getGrantsForScope(REWARD_SCOPE).first()
+            // Use the unfiltered deviceId+scope Flow — history is
+            // expected to include both active and expired rows, and
+            // the SQL filter used by the active-only view is not
+            // appropriate here.
+            val grants = grantDao.getGrantsForScopeFlow(deviceId, REWARD_SCOPE).first()
+
+            val now = timeProvider.wallInstant().toString()
 
             grants.map { grant ->
                 val isActive = grant.expires_at > now
@@ -143,17 +165,21 @@ class RewardManager @Inject constructor(
 
     /**
      * Verifica si hay saldo disponible.
+     *
+     * Scoped to [deviceId]; see [getRewardBalance].
      */
-    suspend fun hasRewardBalance(): Boolean {
-        return getRewardBalance() > 0
+    suspend fun hasRewardBalance(deviceId: String): Boolean {
+        return getRewardBalance(deviceId) > 0
     }
 
     /**
      * Consume tiempo del saldo de recompensa.
      * Devuelve true si se pudo consumir.
+     *
+     * Scoped to [deviceId]; see [getRewardBalance].
      */
-    suspend fun consumeRewardMinutes(minutes: Int): Boolean {
-        val currentBalance = getRewardBalance()
+    suspend fun consumeRewardMinutes(deviceId: String, minutes: Int): Boolean {
+        val currentBalance = getRewardBalance(deviceId)
 
         if (currentBalance < minutes) {
             Log.w(TAG, "Not enough reward balance: $currentBalance < $minutes")
@@ -170,12 +196,23 @@ class RewardManager @Inject constructor(
      * Procesa un grant de recompensa desde el servidor.
      *
      * §0.3: El grant tiene source='reward'.
+     *
+     * [deviceId] MUST be the real paired device id, not a placeholder
+     * like `"reward_device"` — the previous implementation wrote that
+     * magic string to `grants.device_id` and silently orphaned the row
+     * from every deviceId-scoped read, so the UI could never see the
+     * reward the parent had actually granted.
      */
     suspend fun processRewardGrant(
         grantId: String,
+        deviceId: String,
         minutes: Int,
         expiresAt: Instant
     ): Boolean {
+        if (deviceId.isBlank()) {
+            Log.w(TAG, "processRewardGrant called with blank deviceId — refusing to write an orphaned row")
+            return false
+        }
         return try {
             val now = timeProvider.wallInstant()
             val grantedAt = now.toString()
@@ -183,7 +220,7 @@ class RewardManager @Inject constructor(
 
             val grant = GrantEntity(
                 id = "reward_$grantId",
-                device_id = "reward_device",
+                device_id = deviceId,
                 request_id = null,
                 scope = REWARD_SCOPE,
                 minutes = minutes,

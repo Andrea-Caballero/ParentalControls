@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
@@ -85,6 +87,25 @@ class SupabaseClientProvider internal constructor(
         ignoreUnknownKeys = true
         isLenient = true
     }
+
+    @Serializable
+    private data class RegisterPushTokenBody(
+        val token: String,
+    )
+
+    @Serializable
+    private data class RequestTimeBody(
+        val minutes: Int,
+        val package_name: String? = null,
+        val reason: String? = null,
+    )
+
+    @Serializable
+    private data class RecordUsageBody(
+        val package_name: String,
+        val minutes_used: Int,
+        val device_id: String,
+    )
 
     // HTTP Client con TLS 1.3 y Certificate Pinning
     val httpClient: HttpClient by lazy {
@@ -279,10 +300,14 @@ class SupabaseClientProvider internal constructor(
      */
     suspend fun registerPushToken(token: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            if (token.isBlank()) {
+                return@withContext Result.failure(IllegalArgumentException("Empty FCM token"))
+            }
+
             val accessToken = authManager.getAccessToken()
                 ?: return@withContext Result.failure(IllegalStateException("No access token"))
 
-            val body = "{\"token\":\"$token\"}"
+            val body = json.encodeToString(RegisterPushTokenBody(token))
             httpClient.post("${SUPABASE_URL}/functions/v1/register-token") {
                 header("Authorization", "Bearer $accessToken")
                 header("Content-Type", "application/json")
@@ -323,15 +348,20 @@ class SupabaseClientProvider internal constructor(
         reason: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
+            if (minutes <= 0) {
+                return@withContext Result.failure(IllegalArgumentException("minutes must be positive"))
+            }
+
             val accessToken = authManager.getAccessToken()
                 ?: return@withContext Result.failure(IllegalStateException("No access token"))
 
-            val body = buildString {
-                append("{\"minutes\":$minutes")
-                packageName?.let { append(",\"package_name\":\"$it\"") }
-                reason?.let { append(",\"reason\":\"$it\"") }
-                append("}")
-            }
+            val body = json.encodeToString(
+                RequestTimeBody(
+                    minutes = minutes,
+                    package_name = packageName,
+                    reason = reason,
+                )
+            )
 
             val response = httpClient.post("${SUPABASE_URL}/rest/v1/time_requests") {
                 header("Authorization", "Bearer $accessToken")
@@ -358,8 +388,15 @@ class SupabaseClientProvider internal constructor(
             val accessToken = authManager.getAccessToken()
                 ?: return@withContext Result.failure(IllegalStateException("No access token"))
 
-            val deviceId = authManager.deviceId.value ?: ""
-            val body = "{\"package_name\":\"$packageName\",\"minutes_used\":$minutes,\"device_id\":\"$deviceId\"}"
+            val deviceId = authManager.deviceId.value
+                ?: return@withContext Result.failure(IllegalStateException("No device id"))
+            val body = json.encodeToString(
+                RecordUsageBody(
+                    package_name = packageName,
+                    minutes_used = minutes,
+                    device_id = deviceId,
+                )
+            )
 
             httpClient.post("${SUPABASE_URL}/rest/v1/usage_logs") {
                 header("Authorization", "Bearer $accessToken")
