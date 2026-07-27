@@ -1,15 +1,12 @@
 // T15: Emparejamiento - Edge Function
 // Valida pairing_code, crea/asocia device y escribe device_id en app_metadata
 //
-// SECURITY: the previous code did SELECT ACTIVE → side effects → UPDATE
-// status=CONSUMED, allowing two concurrent claims with the same ACTIVE
-// code to each create a device before either UPDATE ran. The fix is
-// the atomic UPDATE … RETURNING inside `claimPairingCode` (status=ACTIVE
-// AND expires_at>NOW() predicate) so only one request can claim the
-// row. Downstream effects are run only by the winner; race losers get
-// a deterministic 4xx with zero side effects. If downstream work fails
-// after the claim, the code STAYS CONSUMED — caller must generate a
-// new code.
+// Pairing redemption is committed by `redeem_pairing_code_atomic`.
+// The database function locks the ACTIVE code, performs the child/device/
+// metadata/policy writes in one transaction, and transitions the code to
+// CONSUMED only after those writes succeed. Any downstream error rolls the
+// transaction back, leaving the code ACTIVE and retryable. Race losers receive
+// a deterministic 4xx without creating duplicate pairing state.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -83,40 +80,36 @@ export async function handleRequest(req: Request): Promise<Response> {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // 1. Atomic CAS claim (UPDATE … RETURNING filtered by
-    //    code=eq.X AND status=ACTIVE AND expires_at>NOW()). Postgres'
-    //    row-level lock serializes concurrent UPDATEs so only one
-    //    predicate matches. Atomic — replaces the previous
-    //    SELECT→side-effects→UPDATE race window.
-    const claim = await claimPairingCode(supabaseAdmin, code);
-    if (!claim.ok) {
-      return new Response(
-        JSON.stringify({ error: claim.error, code: claim.error }),
-        { status: claim.httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    // Read-only preflight avoids creating an agent user for a code that is
+    // already invalid. The database RPC repeats these checks while holding a
+    // row lock; this preflight is not the commit boundary.
+    const preflight = await inspectPairingCode(supabaseAdmin, code);
+    if (!preflight.ok) {
+      return pairingErrorResponse(preflight.error, preflight.httpStatus);
     }
-    const pairingRecord = claim.row;
 
-    // 2. Obtener o crear usuario anónimo del agente (auth.users)
-    // El agente usa anon key, así que auth.uid() es null
-    // Creamos un usuario anónimo con email device-based
+    // Resolve or create the anonymous agent user before the database
+    // transaction. The RPC writes device_id into this user's app metadata as
+    // part of the same transaction as the pairing rows.
     let agentUserId: string;
-
-    // Buscar usuario existente por metadata (si el agente ya se registró antes)
+    let createdAgentUser = false;
     const deviceHash = await hashDeviceIdentifier(device_name, device_model);
+    const agentEmail = `device_${deviceHash}@parentalcontrol.local`;
 
-    const { data: existingUsers } = await supabaseAdmin
-      .from("auth.users")
-      .select("id")
-      .ilike("email", `%${deviceHash}%`)
-      .limit(1);
+    // Auth admin lookup — `auth.users` is not exposed through PostgREST, so
+    // the previous `from("auth.users").select("id")...` lookup would only
+    // work if the project granted the service_role key access to the auth
+    // schema via the API. Use `auth.admin.listUsers` instead and filter
+    // client-side by the deterministic device email. listUsers only
+    // supports page/perPage pagination (no email filter), so we page
+    // through results with a small safety cap and stop early on a match.
+    const existingAgentId = await findAgentUserIdByEmail(supabaseAdmin, agentEmail);
 
-    if (existingUsers && existingUsers.length > 0) {
-      agentUserId = existingUsers[0].id;
+    if (existingAgentId) {
+      agentUserId = existingAgentId;
     } else {
-      // Crear usuario anónimo para el dispositivo
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email: `device_${deviceHash}@parentalcontrol.local`,
+        email: agentEmail,
         email_confirm: true,
         user_metadata: {
           device_hash: deviceHash,
@@ -125,234 +118,154 @@ export async function handleRequest(req: Request): Promise<Response> {
       });
 
       if (createError || !newUser.user) {
-        // SECURITY: code stays CONSUMED — caller must generate a new
-        // code if they want to retry.
         throw new Error(`Error creando usuario: ${createError?.message}`);
       }
       agentUserId = newUser.user.id;
+      createdAgentUser = true;
     }
 
-    // 3. Resolver / crear el niño (Change A — feat-multi-child-picker §A.7).
-    // El padre captura el nombre en el "name this child" prompt, lo sube a
-    // pairing_codes.child_first_name, y la edge function lo promueve a la
-    // tabla children con ON CONFLICT para mantener idempotencia si el
-    // dispositivo vuelve a emparejarse bajo el mismo nombre. Si la fila ya
-    // existe (RETURNING id es null), hacemos un SELECT por
-    // (parent_id, first_name) para resolver el id existente.
-    const { data: insertedChild, error: childInsertError } = await supabaseAdmin
-      .from("children")
-      .insert({
-        parent_id: pairingRecord.parent_id,
-        first_name: trimmedChildName,
-      })
-      .select("id")
-      .single();
-
-    let childId: string;
-    if (childInsertError || !insertedChild) {
-      // Posible conflicto UNIQUE (parent_id, first_name): el niño ya existe.
-      // Hacemos fallback a SELECT — el padre ya tiene un hijo con este
-      // nombre, lo cual es exactamente lo que queremos para idempotencia.
-      const { data: existingChild, error: childSelectError } = await supabaseAdmin
-        .from("children")
-        .select("id")
-        .eq("parent_id", pairingRecord.parent_id)
-        .eq("first_name", trimmedChildName)
-        .single();
-
-      if (childSelectError || !existingChild) {
-        throw new Error(
-          `Error resolviendo niño: ${childInsertError?.message ?? childSelectError?.message}`
-        );
-      }
-      childId = existingChild.id;
-    } else {
-      childId = insertedChild.id;
-    }
-
-    // 4. Crear dispositivo (con child_id enlazado al niño recién resuelto).
-    const { data: device, error: deviceError } = await supabaseAdmin
-      .from("devices")
-      .insert({
-        device_name,
-        parent_id: pairingRecord.parent_id,
-        device_model,
-        os_version,
-        app_version,
-        device_state: "ACTIVE",
-        policy_version: 1,
-        child_id: childId,
-      })
-      .select()
-      .single();
-
-    if (deviceError || !device) {
-      // SECURITY: code stays CONSUMED — caller must generate a new
-      // code if they want to retry. Intentionally no rollback to
-      // ACTIVE; the fail-closed tradeoff is part of the audit fix.
-      throw new Error(`Error creando dispositivo: ${deviceError?.message}`);
-    }
-
-    // 4. Escribir device_id en app_metadata del usuario
-    const { error: metaError } = await supabaseAdmin.auth.admin.updateUserById(
-      agentUserId,
+    // The RPC is the sole commit boundary. It locks the pairing code, writes
+    // child/device/app_metadata/policy state, and consumes the code last. A
+    // raised database error rolls every one of those writes back.
+    const { data: redemptionData, error: redemptionError } = await supabaseAdmin.rpc(
+      "redeem_pairing_code_atomic",
       {
-        app_metadata: {
-          device_id: device.id,
-        },
-      }
+        p_code: code,
+        p_agent_user_id: agentUserId,
+        p_device_name: device_name,
+        p_device_model: device_model ?? null,
+        p_os_version: os_version ?? null,
+        p_app_version: app_version,
+        p_child_first_name: trimmedChildName,
+        p_age_band: age_band ?? null,
+      },
     );
 
-    if (metaError) {
-      throw new Error(`Error actualizando app_metadata: ${metaError.message}`);
+    if (redemptionError) {
+      if (createdAgentUser) {
+        await deleteAgentUser(supabaseAdmin, agentUserId);
+      }
+      throw new Error(`Error completando pairing: ${redemptionError.message}`);
     }
 
-    // 5. Aplicar plantilla de política según age_band
-    const templateAgeBand = age_band || pairingRecord.device_name?.split("-")[0] || "7-12";
-    await applyPolicyTemplate(supabaseAdmin, device.id, templateAgeBand);
+    const redemption = redemptionData as PairingRedemptionResult | null;
+    if (!redemption) {
+      throw new Error("Error completando pairing: respuesta vacía");
+    }
+    if (redemption.error) {
+      const failure = classifyPairingError(redemption.error);
+      if (createdAgentUser) {
+        await deleteAgentUser(supabaseAdmin, agentUserId);
+      }
+      return pairingErrorResponse(failure.error, failure.httpStatus);
+    }
+    if (!redemption.success || !redemption.device_id || !redemption.parent_id) {
+      if (createdAgentUser) {
+        await deleteAgentUser(supabaseAdmin, agentUserId);
+      }
+      throw new Error("Error completando pairing: respuesta inválida");
+    }
 
-    // 6. (Intentionally no late `update({ status: "CONSUMED" })` here:
-    //    the atomic claim in step 1 is the one and only transition
-    //    to CONSUMED — adding a second UPDATE re-opens the replay race.)
-
-    // 7. Disparar FCM para notificar al padre
-    await sendFcmNotification(supabaseAdmin, pairingRecord.parent_id, {
+    // Notification remains best effort and happens only after the pairing
+    // transaction commits. A push failure must not roll back a valid pairing.
+    await sendFcmNotification(supabaseAdmin, redemption.parent_id, {
       type: "DEVICE_PAIRED",
-      device_id: device.id,
+      device_id: redemption.device_id,
       device_name,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        device_id: device.id,
-        parent_id: pairingRecord.parent_id,
-        policy_version: 1,
+        device_id: redemption.device_id,
+        parent_id: redemption.parent_id,
+        policy_version: redemption.policy_version ?? 1,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Pairing error:", error);
+    const message = error instanceof Error ? error.message : "Error interno de pairing";
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 }
 
-// ============ Atomic claim + diagnostic ============
+// ============ Pairing validation + RPC result contract ============
 
-type ClaimOutcome =
-  | { ok: true; row: { id: string; parent_id: string; device_name: string | null } }
-  | { ok: false; httpStatus: 404 | 409 | 410; error: string };
+type PairingFailure = { ok: false; httpStatus: 404 | 409 | 410; error: string };
+type PairingPreflight = { ok: true } | PairingFailure;
 
-/**
- * Atomic UPDATE … RETURNING (status='CONSUMED', used_at=NOW())
- * filtered by code=eq.X AND status=ACTIVE AND expires_at>NOW().
- * Postgres' row-level lock serializes concurrent UPDATEs; only the
- * request whose predicate matches sees the row. On 0 rows, the
- * diagnostic SELECT below is read-only (NO mutation) so rows still
- * ACTIVE-past-TTL stay ACTIVE for the pg_cron cleanup job.
- */
+type PairingRedemptionResult = {
+  success?: boolean;
+  error?: string;
+  device_id?: string;
+  parent_id?: string;
+  policy_version?: number;
+};
+
 // deno-lint-ignore no-explicit-any
-async function claimPairingCode(supabase: any, code: string): Promise<ClaimOutcome> {
-  const nowIso = new Date().toISOString();
-
-  const { data: claimed, error: claimError } = await supabase
+async function inspectPairingCode(supabase: any, code: string): Promise<PairingPreflight> {
+  const { data, error } = await supabase
     .from("pairing_codes")
-    .update({ status: "CONSUMED", used_at: nowIso })
-    .eq("code", code)
-    .eq("status", "ACTIVE")
-    .gt("expires_at", nowIso)
-    .select("*")
-    .maybeSingle();
-
-  if (claimError) {
-    throw new Error(`pairing claim failed: ${claimError.message}`);
-  }
-  if (claimed) {
-    return {
-      ok: true,
-      row: claimed as { id: string; parent_id: string; device_name: string | null },
-    };
-  }
-
-  // Read-only diagnostic — classify the 0-row outcome.
-  const { data: diag } = await supabase
-    .from("pairing_codes")
-    .select("*")
+    .select("status,expires_at")
     .eq("code", code)
     .maybeSingle();
 
-  if (!diag) return { ok: false, httpStatus: 404, error: "INVALID_CODE" };
-  const d = diag as { status: string; expires_at: string };
-  if (d.status === "CONSUMED") return { ok: false, httpStatus: 409, error: "ALREADY_USED" };
-  if (d.status === "EXPIRED" || d.expires_at <= nowIso) return { ok: false, httpStatus: 410, error: "EXPIRED_CODE" };
-  if (d.status === "REVOKED") return { ok: false, httpStatus: 409, error: "REVOKED_CODE" };
-  return { ok: false, httpStatus: 409, error: "INACTIVE_CODE" };
+  if (error) {
+    throw new Error(`pairing preflight failed: ${error.message}`);
+  }
+  if (!data) {
+    return { ok: false, httpStatus: 404, error: "INVALID_CODE" };
+  }
+
+  const row = data as { status: string; expires_at: string };
+  if (row.status === "ACTIVE" && row.expires_at > new Date().toISOString()) {
+    return { ok: true };
+  }
+  return { ok: false, ...classifyPairingError(
+    row.status === "ACTIVE" ? "EXPIRED_CODE" : statusToPairingError(row.status),
+  ) };
+}
+
+function statusToPairingError(status: string): string {
+  if (status === "CONSUMED") return "ALREADY_USED";
+  if (status === "EXPIRED") return "EXPIRED_CODE";
+  if (status === "REVOKED") return "REVOKED_CODE";
+  return "INACTIVE_CODE";
+}
+
+function classifyPairingError(error: string): Omit<PairingFailure, "ok"> {
+  if (error === "INVALID_CODE") return { httpStatus: 404, error };
+  if (error === "EXPIRED_CODE") return { httpStatus: 410, error };
+  if (error === "ALREADY_USED" || error === "REVOKED_CODE" || error === "INACTIVE_CODE") {
+    return { httpStatus: 409, error };
+  }
+  return { httpStatus: 409, error: "INACTIVE_CODE" };
+}
+
+function pairingErrorResponse(error: string, httpStatus: number): Response {
+  return new Response(
+    JSON.stringify({ error, code: error }),
+    { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
 }
 
 // ============ Helpers ============
 
-async function hashDeviceIdentifier(name: string, model: string): Promise<string> {
+export async function hashDeviceIdentifier(name: string, model: string): Promise<string> {
   const encoder = new TextEncoder();
-  const data = encoder.encode(`${name}-${model}-${Date.now()}`);
+  const data = encoder.encode(`${name}-${model}`);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
 }
 
-async function applyPolicyTemplate(
-  supabase: ReturnType<typeof createClient>,
-  deviceId: string,
-  ageBand: string
-): Promise<void> {
-  // Buscar plantilla por age_band
-  const { data: template } = await supabase
-    .from("policy_templates")
-    .select("*")
-    .eq("age_band", ageBand)
-    .single();
-
-  if (!template) {
-    console.warn(`No template found for age_band: ${ageBand}`);
-    return;
-  }
-
-  const config = template.config;
-
-  // Aplicar schedules
-  if (config.schedules && Array.isArray(config.schedules)) {
-    for (const schedule of config.schedules) {
-      await supabase.from("schedules").insert({
-        device_id: deviceId,
-        name: schedule.id,
-        days: schedule.days,
-        from_time: schedule.from,
-        to_time: schedule.to,
-        action: schedule.action,
-        allow_list: schedule.allow_list || null,
-        is_active: true,
-      });
-    }
-  }
-
-  // Aplicar app_policies
-  if (config.app_policies && Array.isArray(config.app_policies)) {
-    for (const policy of config.app_policies) {
-      await supabase.from("app_policies").insert({
-        device_id: deviceId,
-        package_name: policy.package_name,
-        state: policy.state,
-        daily_limit_minutes: policy.daily_limit_minutes || null,
-        category: policy.category || null,
-      }).onConflict(["device_id", "package_name"]).merge();
-    }
-  }
-}
-
 async function sendFcmNotification(
-  supabase: ReturnType<typeof createClient>,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
   parentId: string,
   payload: Record<string, unknown>
 ): Promise<void> {
@@ -412,6 +325,47 @@ async function sendFcmNotification(
     } catch (e) {
       console.error("FCM send network error:", e);
     }
+  }
+}
+
+// Page size for the auth admin user list lookup. 1000 is well above the
+// expected agent-user volume for a single Supabase project, so we expect a
+// single page in practice.
+const AGENT_LOOKUP_PAGE_SIZE = 1000;
+// Safety cap against runaway pagination in a pathological project. Agent
+// emails are unique per device hash, so the worst-case cost is bounded by
+// this many pages of users.
+const AGENT_LOOKUP_MAX_PAGES = 5;
+
+// deno-lint-ignore no-explicit-any
+async function findAgentUserIdByEmail(supabase: any, email: string): Promise<string | null> {
+  let page = 1;
+  for (let i = 0; i < AGENT_LOOKUP_MAX_PAGES; i++) {
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page,
+      perPage: AGENT_LOOKUP_PAGE_SIZE,
+    });
+    if (error) {
+      throw new Error(`agent-user lookup failed: ${error.message}`);
+    }
+    const users = (data?.users ?? []) as Array<{ id: string; email?: string }>;
+    const match = users.find((u) => u.email === email);
+    if (match) return match.id;
+    if (!data?.nextPage) return null;
+    page = data.nextPage;
+  }
+  throw new Error("agent-user lookup exceeded pagination safety cap");
+}
+
+// deno-lint-ignore no-explicit-any
+async function deleteAgentUser(supabase: any, userId: string): Promise<void> {
+  try {
+    const { error } = await supabase.auth.admin.deleteUser(userId);
+    if (error) {
+      console.warn(`Could not delete orphan pairing user ${userId}:`, error);
+    }
+  } catch (e) {
+    console.warn(`Could not delete orphan pairing user ${userId}:`, e);
   }
 }
 

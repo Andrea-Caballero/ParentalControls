@@ -1,7 +1,20 @@
 // T15: Approve Request - Edge Function
-// Aprueba o rechaza un time_request:
-//   - action: "APPROVE" (default, backward compat) -> crea grant, FCM POLICY_UPDATED
-//   - action: "DENY"                              -> marca DENIED, sin grant, FCM REQUEST_DENIED
+// Aprueba o rechaza un time_request de forma ATÓMICA vía la RPC
+// `approve_request_atomic` (supabase/migrations/012_approve_request_atomic.sql).
+//
+//   - action: "APPROVE" (default)  -> la RPC inserta grant + flip verdict
+//   - action: "DENY"               -> la RPC flip verdict sin grant
+//
+// Garantías:
+//   - Verdict + grant commitean en UNA transacción Postgres (un
+//     solo commit boundary). Un retry tras un fallo de red no
+//     puede crear un grant duplicado ni dejar el verdict
+//     aprobado sin grant.
+//   - `UNIQUE(grants.request_id)` refuerza idempotencia en DB.
+//   - FCM solo se dispara DESPUÉS de un commit exitoso.
+//   - Auth y ownership se validan en el handler Y en la RPC
+//     (defense in depth: si un caller futuro skipea el JWT
+//     precheck, la RPC todavía rechaza).
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -11,6 +24,26 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
+
+function decodeJwtPayload(authHeader: string): Record<string, unknown> | null {
+  const match = authHeader.match(/^Bearer\s+(\S+)$/i);
+  if (!match) return null;
+
+  const segments = match[1].split(".");
+  if (segments.length !== 3 || !segments[1]) return null;
+
+  try {
+    const payload = segments[1].replace(/-/g, "+").replace(/_/g, "/");
+    const paddedPayload = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(paddedPayload)) return null;
+    const decoded = JSON.parse(atob(paddedPayload));
+    return decoded && typeof decoded === "object" && !Array.isArray(decoded)
+      ? decoded as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Handle an incoming request to the edge function. Exported so the
@@ -24,19 +57,19 @@ export async function handleRequest(req: Request): Promise<Response> {
 
   try {
     // Solo padres pueden aprobar/rechazar
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Token requerido" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+     const authHeader = req.headers.get("Authorization");
+     if (!authHeader) {
+       return new Response(
+         JSON.stringify({ error: "Token requerido" }),
+         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+       );
+     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const jwtPayload = JSON.parse(atob(token.split(".")[1]));
-    const parentId = jwtPayload.sub;
+     const jwtPayload = decodeJwtPayload(authHeader);
+     const parentId = jwtPayload?.sub;
 
-    if (!parentId) {
+     if (!parentId) {
+
       return new Response(
         JSON.stringify({ error: "Usuario no autenticado" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -64,7 +97,10 @@ export async function handleRequest(req: Request): Promise<Response> {
       );
     }
 
-    // minutes solo es requerido para APPROVE
+    // minutes solo es requerido para APPROVE. Para DENY, p_minutes
+    // se pasa NULL y la RPC lo interpreta como DENY.
+    const rpcMinutes = effectiveAction === "DENY" ? null : minutes;
+
     if (effectiveAction !== "DENY" && !minutes) {
       return new Response(
         JSON.stringify({ error: "minutes es requerido para APPROVE" }),
@@ -77,7 +113,12 @@ export async function handleRequest(req: Request): Promise<Response> {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // 1. Verificar que la solicitud existe y pertenece a un dispositivo del padre
+    // 1. Verificar que la solicitud existe y pertenece a un dispositivo
+    //    del padre. Esta lectura es previa a la RPC y permite devolver
+    //    404/403 con un envelope conocido ANTES de tocar la RPC; la
+    //    RPC además valida ownership en su propio cuerpo, pero el
+    //    precheck temprano mantiene el contrato de error existente
+    //    para clientes que ya dependen de los códigos HTTP actuales.
     const { data: timeRequest, error: requestError } = await supabaseAdmin
       .from("time_requests")
       .select("*, devices(parent_id)")
@@ -101,151 +142,127 @@ export async function handleRequest(req: Request): Promise<Response> {
 
     // Slice A — 1h auto-DENY contract (per
     // `time-request-approval/spec.md` ADDED Requirement + tasks.md A.2.7).
-    // Before the main APPROVE/DENY logic runs, sweep any PENDING
-    // time_request on the SAME device that has been waiting for a
-    // parent response for more than 1 hour. Auto-deny it so the parent
-    // UI does not show stale requests that they have likely forgotten
-    // about. The sweep is idempotent (WHERE status='PENDING' is the
+    // Before the atomic RPC runs, sweep any PENDING time_request on the
+    // SAME device that has been waiting for a parent response for more
+    // than 1 hour. Auto-deny so the parent UI does not show stale
+    // requests. The sweep is idempotent (WHERE status='PENDING' is the
     // gate), so a second call within the same window is a no-op.
-    //
-    // Scope: device_id matches the request's device_id. Other devices
-    // are not affected (we only clean up THIS parent's stale requests).
     await autoDenyStaleRequests(
       supabaseAdmin,
       timeRequest.device_id,
     );
 
-    // 2. Branch DENY
-    if (effectiveAction === "DENY") {
-      // Idempotencia: si ya está DENIED, devolver éxito sin re-procesar.
-      if (timeRequest.status === "DENIED") {
+    // 2. Llamar la RPC atómica. La RPC:
+    //    - hace `SELECT ... FOR UPDATE` sobre el time_request para
+    //      serializar retries concurrentes,
+    //    - verifica `device.parent_id = p_parent_id` (defense in depth),
+    //    - decide APPROVE/DENY según `p_minutes`,
+    //    - en APPROVE: hace UPDATE time_requests + INSERT grant en la
+    //      misma transacción; UNIQUE(grants.request_id) garantiza un
+    //      solo grant por request,
+    //    - en DENY: hace UPDATE time_requests a DENIED sin grant,
+    //    - en retry idempotente (status ya coincide): devuelve el
+    //      grant existente con `idempotent: true`,
+    //    - en conflicto (DENY tras APPROVE o APPROVE tras DENY):
+    //      devuelve `{ error, code }` y la Edge Function mapea a 409.
+    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc(
+      "approve_request_atomic",
+      {
+        p_request_id: request_id,
+        p_parent_id: parentId,
+        p_minutes: rpcMinutes,
+        p_response_text: response_text ?? null,
+      },
+    );
+
+    if (rpcError) {
+      // La RPC falló a nivel de transporte o Postgres. Por el
+      // contrato atómico, NINGÚN cambio de estado se persistió:
+      // o la RPC commitea todo o nada. Devolvemos 500 sin enviar
+      // FCM para no notificar al niño de un cambio que no ocurrió.
+      throw new Error(`Error en approve_request_atomic: ${rpcError.message}`);
+    }
+
+    // rpcResult es el jsonb devuelto por la función.
+    const result = (rpcResult ?? {}) as {
+      success?: boolean;
+      decision?: "APPROVED" | "DENIED";
+      error?: string;
+      code?: string;
+      grant_id?: string;
+      minutes?: number;
+      expires_at?: string;
+      policy_version?: number;
+      idempotent?: boolean;
+    };
+
+    // 3. Mapear errores/conflictos de la RPC a HTTP 4xx.
+    if (result.error) {
+      if (result.code === "NOT_FOUND") {
         return new Response(
-          JSON.stringify({
-            success: true,
-            decision: "DENIED",
-            idempotent: true,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: result.error }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-
-      // Si ya fue APPROVED no se puede revertir a DENIED (semánticamente confuso
-      // y bloquearía inconsistencias con grants ya entregados).
-      if (timeRequest.status === "APPROVED") {
+      if (result.code === "UNAUTHORIZED") {
         return new Response(
-          JSON.stringify({ error: "Solicitud ya aprobada, no se puede denegar" }),
+          JSON.stringify({ error: result.error }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (
+        result.code === "ALREADY_APPROVED" ||
+        result.code === "ALREADY_DENIED"
+      ) {
+        return new Response(
+          JSON.stringify({ error: result.error, code: result.code }),
           { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      return new Response(
+        JSON.stringify({ error: result.error }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-      // Actualizar estado a DENIED
-      const { error: updateError } = await supabaseAdmin
-        .from("time_requests")
-        .update({
-          status: "DENIED",
-          parent_response: response_text || null,
-          responded_at: new Date().toISOString(),
-        })
-        .eq("id", request_id);
+    if (!result.success || !result.decision) {
+      // La RPC devolvió un payload inesperado. No podemos confiar en
+      // que el commit ocurrió; no notificamos al niño.
+      throw new Error("Respuesta inesperada de approve_request_atomic");
+    }
 
-      if (updateError) {
-        throw new Error(`Error actualizando solicitud: ${updateError.message}`);
-      }
-
-      // FCM al dispositivo del niño
+    // 4. FCM solo DESPUÉS de un commit exitoso. Mantenemos el
+    //    contrato del handler legacy: el padre no espera al push, el
+    //    push es best-effort.
+    if (result.decision === "APPROVED") {
+      await sendFcmToDevice(supabaseAdmin, timeRequest.device_id, {
+        type: "POLICY_UPDATED",
+        grant_id: result.grant_id,
+        minutes: result.minutes,
+        expires_at: result.expires_at,
+        new_policy_version: result.policy_version,
+      });
+    } else if (result.decision === "DENIED") {
       await sendFcmToDevice(supabaseAdmin, timeRequest.device_id, {
         type: "REQUEST_DENIED",
         request_id: request_id,
         response_text: response_text || null,
       });
-
-      return new Response(
-        JSON.stringify({ success: true, decision: "DENIED" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
-    // 3. Branch APPROVE (legacy behavior)
-    // Verificar que no está ya aprobada (idempotencia)
-    if (timeRequest.status === "APPROVED") {
-      // Ya fue aprobada, buscar grant existente
-      const { data: existingGrant } = await supabaseAdmin
-        .from("grants")
-        .select("*")
-        .eq("request_id", request_id)
-        .eq("source", "EXTRA_TIME")
-        .single();
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          idempotent: true,
-          grant_id: existingGrant?.id,
-          message: "Solicitud ya aprobada anteriormente",
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 4. Actualizar estado de la solicitud
-    await supabaseAdmin
-      .from("time_requests")
-      .update({
-        status: "APPROVED",
-        parent_response: response_text || null,
-        responded_at: new Date().toISOString(),
-      })
-      .eq("id", request_id);
-
-    // 5. Crear grant (idempotente por request_id único)
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + minutes);
-
-    const { data: grant, error: grantError } = await supabaseAdmin
-      .from("grants")
-      .insert({
-        device_id: timeRequest.device_id,
-        request_id: request_id,
-        scope: timeRequest.package_name || "device",
-        minutes: minutes,
-        source: "EXTRA_TIME",
-        status: "APPROVED",
-        expires_at: expiresAt.toISOString(),
-        granted_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (grantError) {
-      throw new Error(`Error creando grant: ${grantError.message}`);
-    }
-
-    // 6. Bump de versión (trigger automático en grants)
-    // El trigger AFTER INSERT en grants ya llama a bump_policy_version
-
-    // 7. Obtener versión actualizada
-    const { data: device } = await supabaseAdmin
-      .from("devices")
-      .select("policy_version")
-      .eq("id", timeRequest.device_id)
-      .single();
-
-    // 8. Enviar FCM al dispositivo
-    await sendFcmToDevice(supabaseAdmin, timeRequest.device_id, {
-      type: "POLICY_UPDATED",
-      grant_id: grant.id,
-      minutes: minutes,
-      expires_at: expiresAt.toISOString(),
-      new_policy_version: device?.policy_version,
-    });
-
+    // 5. Envelope de respuesta: preserva el shape del handler legacy
+    //    (success/grant_id/minutes/expires_at/policy_version) y agrega
+    //    `decision` + `idempotent` para que el cliente pueda distinguir
+    //    una primera aprobación de un retry idempotente.
     return new Response(
       JSON.stringify({
-        success: true,
-        grant_id: grant.id,
-        minutes: minutes,
-        expires_at: expiresAt.toISOString(),
-        policy_version: device?.policy_version,
+        success: result.success,
+        decision: result.decision,
+        grant_id: result.grant_id,
+        minutes: result.minutes,
+        expires_at: result.expires_at,
+        policy_version: result.policy_version,
+        idempotent: result.idempotent === true,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -319,7 +336,7 @@ async function sendFcmToDevice(
  * The PATCH is scoped by device_id (the parent on the device) and
  * idempotent (the WHERE status='PENDING' predicate makes a second
  * call within the same window a no-op). Best-effort: if the update
- * fails (network blip, RLS misconfig), the main APPROVE/DENY logic
+ * fails (network blip, RLS misconfig), the atomic approval RPC
  * still runs — the sweep failure is logged but does not block the
  * parent's decision.
  *
