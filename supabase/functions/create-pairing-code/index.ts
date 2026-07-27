@@ -3,6 +3,8 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractBearerToken } from "../_shared/jwt.ts";
+import { errorMessage } from "../_shared/error.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,14 +18,20 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (authHeader === null) {
       return new Response(
         JSON.stringify({ error: "Token requerido" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const token = authHeader.replace("Bearer ", "");
+    const token = extractBearerToken(authHeader);
+    if (!token) {
+      return new Response(
+        JSON.stringify({ error: "Token invalido o expirado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Cliente admin (se crea antes para validar el JWT del padre)
     const supabaseAdmin = createClient(
@@ -69,7 +77,7 @@ serve(async (req) => {
       .single();
 
     if (error) {
-      throw new Error(`Error creando código: ${error.message}`);
+      throw new Error(`Error creando código: ${errorMessage(error)}`);
     }
 
     // Generar QR data URL (codificado en base64 para передачи)
@@ -92,9 +100,10 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Create pairing code error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Create pairing code error:", message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

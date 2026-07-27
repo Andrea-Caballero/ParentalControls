@@ -14,6 +14,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -57,6 +58,40 @@ class PairingManager private constructor(
      */
     @JvmField
     var deviceInfoProvider: () -> DeviceInfo = ::getDeviceInfo
+
+    /**
+     * Visible for testing: lets the test inject a stub child-name source so
+     * the request body can carry `child_first_name` without depending on a
+     * UX collection point that the pairing screen does not yet have.
+     *
+     * The pairing edge function (`supabase/functions/pairing/index.ts`)
+     * now returns HTTP 400 when this is missing or empty. The default
+     * returns `null` to match the current production screen (no input
+     * field for the child's name) — this preserves the wire-shape
+     * contract while the device-side capture flow lands in a follow-up.
+     * Returning `null` here keeps the existing call sites and
+     * `PairingManager.pairWithCode` signature unchanged.
+     */
+    @JvmField
+    var childFirstNameProvider: () -> String? = { null }
+
+    /**
+     * Serializes the pairing request body.
+     *
+     * `encodeDefaults = true` is required so the `age_band` and
+     * `child_first_name` properties — both declared with `= null`
+     * defaults so the constructor can omit them — still appear in the
+     * JSON when their value is `null`. kotlinx-serialization's default
+     * `encodeDefaults = false` would drop those keys, leaving the
+     * payload missing `child_first_name` when the device side has no
+     * name to send. Keeping the key present (as `null`) preserves the
+     * wire-shape contract with `supabase/functions/pairing/index.ts`,
+     * which then performs the non-empty validation server-side.
+     */
+    private val requestJson = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
 
     /**
      * Empareja el dispositivo con el código proporcionado.
@@ -194,20 +229,31 @@ class PairingManager private constructor(
 
     /**
      * Construye el body del request de emparejamiento.
+     *
+     * Mirrors the field set validated by
+     * `supabase/functions/pairing/index.ts`:
+     *   - `code`, `device_name`, `device_model`, `os_version`, `app_version`
+     *     are required by the edge function (omission → HTTP 400).
+     *   - `age_band` and `child_first_name` are optional in the schema,
+     *     but the edge function now rejects `child_first_name` whose
+     *     trimmed length is `0` or `> 32` (also HTTP 400). We send the
+     *     field unconditionally and let [childFirstNameProvider] decide
+     *     the value; a `null` round-trips through the server's
+     *     `(child_first_name ?? "").trim()` handling, which matches the
+     *     current pairing screen that has no input for the child's name.
      */
     private fun buildPairingRequest(code: String, deviceInfo: DeviceInfo): String {
-        return buildString {
-            append("{")
-            append("\"code\":\"$code\",")
-            append("\"device_name\":\"${deviceInfo.deviceName}\",")
-            append("\"device_model\":\"${deviceInfo.deviceModel}\",")
-            append("\"os_version\":\"${deviceInfo.osVersion}\",")
-            append("\"app_version\":\"${deviceInfo.appVersion}\"")
-            deviceInfo.ageBand?.let {
-                append(",\"age_band\":\"$it\"")
-            }
-            append("}")
-        }
+        return requestJson.encodeToString(
+            PairingRequestBody(
+                code = code,
+                device_name = deviceInfo.deviceName,
+                device_model = deviceInfo.deviceModel,
+                os_version = deviceInfo.osVersion,
+                app_version = deviceInfo.appVersion,
+                age_band = deviceInfo.ageBand,
+                child_first_name = childFirstNameProvider(),
+            )
+        )
     }
 
     /**
@@ -268,6 +314,24 @@ class PairingManager private constructor(
         }
     }
 }
+
+@Serializable
+private data class PairingRequestBody(
+    val code: String,
+    val device_name: String,
+    val device_model: String,
+    val os_version: String,
+    val app_version: String,
+    val age_band: String? = null,
+    /**
+     * Child's first name (1..32 chars, non-blank). Mirrors
+     * `supabase/functions/pairing/index.ts` validation. Nullable so the
+     * device side can serialize `null` while the device-side capture UX
+     * is still pending — the server treats `null`/empty as HTTP 400 and
+     * the production capture flow is tracked as a follow-up.
+     */
+    val child_first_name: String? = null,
+)
 
 /**
  * Wire-shape DTOs for the `POST /functions/v1/pairing` endpoint.

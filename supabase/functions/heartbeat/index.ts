@@ -3,11 +3,16 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { parseDeviceId } from "../_shared/jwt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Re-export so the existing test suite (and any future caller that
+// imports the helper by the index path) keeps working without churn.
+export { parseDeviceId };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -15,24 +20,15 @@ serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    const auth = parseDeviceId(req.headers.get("Authorization"));
+    if (auth.status !== 200) {
       return new Response(
-        JSON.stringify({ error: "Token requerido" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: auth.error }),
+        { status: auth.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const deviceId = payload.device_id;
-
-    if (!deviceId) {
-      return new Response(
-        JSON.stringify({ error: "device_id no encontrado en token" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const deviceId = auth.deviceId;
 
     const {
       battery_level,
@@ -115,9 +111,10 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Heartbeat error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Heartbeat error:", message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

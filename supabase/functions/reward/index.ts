@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { decodeJwtPayload } from "../_shared/jwt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +16,7 @@ const REWARD_LIMITS = {
   weekly_max_minutes: 180, // Máximo 3 horas por semana
 };
 
-serve(async (req) => {
+export async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -29,9 +30,8 @@ serve(async (req) => {
       );
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const jwtPayload = JSON.parse(atob(token.split(".")[1]));
-    const parentId = jwtPayload.sub;
+    const jwtPayload = decodeJwtPayload(authHeader);
+    const parentId = jwtPayload?.sub;
 
     if (!parentId) {
       return new Response(
@@ -163,16 +163,22 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Reward error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Reward error:", message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+}
+
+if (import.meta.main) {
+  serve(handleRequest);
+}
 
 async function sendFcmToDevice(
-  supabase: ReturnType<typeof createClient>,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
   deviceId: string,
   payload: Record<string, unknown>
 ): Promise<void> {
@@ -184,7 +190,8 @@ async function sendFcmToDevice(
     .limit(1)
     .single();
 
-  if (!tokenRecord) {
+  const record = tokenRecord as { token?: string } | null;
+  if (!record?.token) {
     console.log("No FCM token for device:", deviceId);
     return;
   }
@@ -200,7 +207,7 @@ async function sendFcmToDevice(
         Authorization: `key=${serverKey}`,
       },
       body: JSON.stringify({
-        to: tokenRecord.token,
+        to: record.token,
         priority: "high",
         data: payload,
       }),

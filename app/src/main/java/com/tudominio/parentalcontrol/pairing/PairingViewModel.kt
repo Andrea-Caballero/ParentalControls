@@ -5,6 +5,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -24,7 +25,8 @@ import kotlinx.coroutines.withContext
  */
 @HiltViewModel
 class PairingViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val pairingManager = PairingManager.getInstance(context)
@@ -33,9 +35,19 @@ class PairingViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<PairingUiState>(PairingUiState.Idle)
     val uiState: StateFlow<PairingUiState> = _uiState.asStateFlow()
 
+    // Nombre del niño asociado al dispositivo.
+    // Backed directly by SavedStateHandle so it survives ViewModel
+    // recreation AND process death (the SavedStateRegistry is
+    // rehydrated by the Activity / NavBackStackEntry on cold start).
+    // The exposed StateFlow contract is unchanged: collectors see
+    // the current value and any updates.
+    val childFirstName: StateFlow<String> = savedStateHandle.getStateFlow(
+        KEY_CHILD_FIRST_NAME, ""
+    )
+
     // Código ingresado manualmente
-    private val _manualCode = MutableStateFlow("")
-    val manualCode: StateFlow<String> = _manualCode.asStateFlow()
+    private val _manualCode = savedStateHandle.getStateFlow(KEY_MANUAL_CODE, "")
+    val manualCode: StateFlow<String> = _manualCode
 
     // Eventos de navegación
     // extraBufferCapacity so a `suspend fun emit` from a non-coroutine
@@ -55,13 +67,28 @@ class PairingViewModel @Inject constructor(
     private var lastScanTime: Long = 0
 
     init {
+        pairingManager.childFirstNameProvider = {
+            childFirstName.value.trim().takeIf { it.isNotEmpty() }
+        }
         Log.d(TAG, "PairingViewModel inicializado")
+    }
+
+    /**
+     * Actualiza el nombre del niño con caracteres seguros para el backend.
+     */
+    fun updateChildFirstName(name: String) {
+        savedStateHandle[KEY_CHILD_FIRST_NAME] = name
+            .trim()
+            .filter { it.isLetter() || it == ' ' || it == '-' || it == '\'' }
+            .replace(Regex("\\s+"), " ")
+            .take(MAX_CHILD_FIRST_NAME_LENGTH)
     }
 
     /**
      * Inicia el emparejamiento con código QR.
      */
     fun startQrPairing() {
+        if (!hasChildFirstName()) return
         Log.d(TAG, "Iniciando emparejamiento por QR")
         _uiState.value = PairingUiState.ScanningQr
     }
@@ -70,21 +97,25 @@ class PairingViewModel @Inject constructor(
      * Inicia el emparejamiento con código manual.
      */
     fun startManualPairing() {
+        if (!hasChildFirstName()) return
         Log.d(TAG, "Iniciando emparejamiento manual")
         _uiState.value = PairingUiState.EnteringCode
     }
+
+    private fun hasChildFirstName(): Boolean = childFirstName.value.isNotBlank()
 
     /**
      * Actualiza el código manual.
      */
     fun updateManualCode(code: String) {
-        _manualCode.value = code.uppercase().filter { it.isLetterOrDigit() }.take(8)
+        savedStateHandle[KEY_MANUAL_CODE] = code.uppercase().filter { it.isLetterOrDigit() }.take(8)
     }
 
     /**
      * Procesa el QR escaneado.
      */
     fun processQrCode(content: String) {
+        if (!hasChildFirstName()) return
         val currentTime = System.currentTimeMillis()
         
         // Evitar procesamiento duplicado (mismo código en 2 segundos)
@@ -143,7 +174,8 @@ class PairingViewModel @Inject constructor(
      * Empareja con el código manual.
      */
     fun pairWithManualCode() {
-        val code = _manualCode.value
+        if (!hasChildFirstName()) return
+        val code = manualCode.value
         if (code.length < PairingManager.CODE_LENGTH) {
             _uiState.value = PairingUiState.Error(
                 "El código debe tener ${PairingManager.CODE_LENGTH} caracteres"
@@ -239,7 +271,7 @@ class PairingViewModel @Inject constructor(
      */
     fun retry() {
         Log.d(TAG, "Reintentando emparejamiento")
-        _manualCode.value = ""
+        savedStateHandle[KEY_MANUAL_CODE] = ""
         _uiState.value = PairingUiState.Idle
     }
 
@@ -258,8 +290,13 @@ class PairingViewModel @Inject constructor(
      */
     fun cancel() {
         Log.d(TAG, "Cancelando emparejamiento")
-        _manualCode.value = ""
+        savedStateHandle[KEY_MANUAL_CODE] = ""
         _uiState.value = PairingUiState.Idle
+    }
+
+    override fun onCleared() {
+        pairingManager.childFirstNameProvider = { null }
+        super.onCleared()
     }
 
     /**
@@ -278,6 +315,13 @@ class PairingViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "PairingViewModel"
+        private const val MAX_CHILD_FIRST_NAME_LENGTH = 80
+
+        /** SavedStateHandle key for the persisted child first name. */
+        const val KEY_CHILD_FIRST_NAME = "child_first_name"
+
+        /** SavedStateHandle key for the persisted manual pairing code. */
+        const val KEY_MANUAL_CODE = "manual_code"
     }
 }
 
@@ -287,11 +331,11 @@ class PairingViewModel @Inject constructor(
 class PairingViewModelFactory(
     @ApplicationContext private val context: Context
 ) : ViewModelProvider.Factory {
-    
+
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(PairingViewModel::class.java)) {
-            return PairingViewModel(context) as T
+            return PairingViewModel(context, SavedStateHandle()) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

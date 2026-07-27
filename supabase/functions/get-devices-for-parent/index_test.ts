@@ -209,6 +209,39 @@ Deno.test({
 });
 
 Deno.test({
+  name: "returns 401 for malformed Authorization without calling Supabase Auth",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    setEnv();
+    let fetchCalled = false;
+    const fetchMock: typeof fetch = async () => {
+      fetchCalled = true;
+      return jsonResponse({ error: "invalid_grant" }, 400);
+    };
+    installFetchMock(fetchMock);
+
+    try {
+      const request = new Request(
+        "https://example.test/functions/v1/get-devices-for-parent",
+        {
+          method: "POST",
+          headers: { Authorization: "Basic test-jwt" },
+          body: "{}",
+        }
+      );
+      const response = await handleRequest(request);
+
+      assertEquals(response.status, 401);
+      assertEquals((await response.json()).error, "Token inválido o expirado");
+      assertEquals(fetchCalled, false);
+    } finally {
+      restoreFetch();
+    }
+  },
+});
+
+Deno.test({
   name:
     "returns only devices for the authenticated parent (RLS scopes per parent)",
   sanitizeOps: false,

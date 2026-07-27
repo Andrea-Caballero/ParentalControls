@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { parseDeviceId } from "../_shared/jwt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,24 +19,15 @@ serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    const auth = parseDeviceId(req.headers.get("Authorization"));
+    if (auth.status !== 200) {
       return new Response(
-        JSON.stringify({ error: "Token requerido" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: auth.error }),
+        { status: auth.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const deviceId = payload.device_id;
-
-    if (!deviceId) {
-      return new Response(
-        JSON.stringify({ error: "device_id no encontrado en token" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const deviceId = auth.deviceId;
 
     const { integrity_token } = await req.json();
 
@@ -88,9 +80,10 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Verify integrity error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Verify integrity error:", message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -123,9 +116,6 @@ async function verifyWithGoogle(integrityToken: string): Promise<IntegrityVerdic
     // Obtener access token desde service account
     const serviceAccount = JSON.parse(serviceAccountJson);
     const accessToken = await getGoogleAccessToken(serviceAccount);
-
-    // Decodificar token (base64url)
-    const tokenPayload = JSON.parse(atob(integrityToken.split(".")[1]));
 
     // Llamar a Play Integrity API
     const response = await fetch(
@@ -174,10 +164,11 @@ async function verifyWithGoogle(integrityToken: string): Promise<IntegrityVerdic
         : undefined,
     };
   } catch (error) {
-    console.error("Google verification error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Google verification error:", message);
     return {
       is_valid: false,
-      failure_reason: `EXCEPTION: ${error.message}`,
+      failure_reason: `EXCEPTION: ${message}`,
     };
   }
 }
@@ -206,7 +197,7 @@ async function getGoogleAccessToken(serviceAccount: {
 
   const key = await crypto.subtle.importKey(
     "pkcs8",
-    strToArrayBuffer(atob(privateKeyBuffer.replace(/-----.*-----/g, ""))),
+    strToArrayBuffer(atob(privateKeyBuffer.replace(/-----.*-----/g, ""))).buffer as ArrayBuffer,
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
     false,
     ["sign"]
