@@ -10,6 +10,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.utils.io.ByteReadChannel
@@ -21,8 +22,15 @@ import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -246,5 +254,149 @@ class PairingManagerTest {
         assertTrue("Expected INVALID_CODE, got $result", result is PairingResult.Error)
         assertEquals(PairingErrorType.INVALID_CODE, (result as PairingResult.Error).type)
         failingClient.close()
+    }
+
+    /**
+     * Follow-up to `windows-backend-pairing-and-approval-readiness`:
+     * `supabase/functions/pairing/index.ts` now requires `child_first_name`
+     * (1..32 chars, non-blank) in the request body (HTTP 400 otherwise).
+     * Verifies the Android client propagates the value returned by
+     * [PairingManager.childFirstNameProvider] into the JSON body sent
+     * to the edge function, and that the existing required fields
+     * (`code`, `device_name`, `device_model`, `os_version`, `app_version`,
+     * `age_band`) stay intact.
+     */
+    @Test
+    fun pairWithCode_includes_child_first_name_in_request_body() = runTest {
+        val capturedBody = AtomicReference<String?>(null)
+        val captureEngine = MockEngine { request ->
+            capturedBody.set((request.body as TextContent).text)
+            respond(
+                content = ByteReadChannel(
+                    """{"device_id":"<uuid-device>","parent_id":"<uuid-parent>"}"""
+                ),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val captureClient = HttpClient(captureEngine) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        every { mockClientProvider.httpClient } returns captureClient
+
+        val manager = PairingManager.getInstance(context)
+        manager.deviceInfoProvider = {
+            DeviceInfo(
+                deviceName = "TestManufacturer TestModel",
+                deviceModel = "TestModel",
+                osVersion = "33",
+                appVersion = "1.0.0",
+                ageBand = "7-12"
+            )
+        }
+        manager.childFirstNameProvider = { "Lucia" }
+
+        val result = manager.pairWithCode("ABCDEFGH")
+
+        assertTrue("Expected Success, got $result", result is PairingResult.Success)
+        val body = capturedBody.get()
+        assertNotNull(
+            "MockEngine MUST capture the request body; got null. " +
+                "Did setBody() go through ContentNegotiation?",
+            body
+        )
+        val json = Json.parseToJsonElement(body!!).jsonObject
+        // The exact field name the edge function validates — keep this
+        // assertion on the JSON property name, not on a Kotlin-side
+        // alias, so a future DTO rename cannot silently break this
+        // contract.
+        val childNameNode = json["child_first_name"]
+        assertNotNull(
+            "Outbound JSON MUST contain the child_first_name key to match " +
+                "supabase/functions/pairing/index.ts — got body=$body",
+            childNameNode
+        )
+        assertEquals(
+            "child_first_name must round-trip through childFirstNameProvider",
+            "Lucia",
+            childNameNode!!.jsonPrimitive.contentOrNull
+        )
+        // Existing required fields stay untouched after the new field
+        // is appended. Re-assert them so a DTO reshape can't quietly
+        // break the contract on either side.
+        assertEquals("ABCDEFGH", json["code"]!!.jsonPrimitive.content)
+        assertEquals(
+            "TestManufacturer TestModel",
+            json["device_name"]!!.jsonPrimitive.content
+        )
+        assertEquals("TestModel", json["device_model"]!!.jsonPrimitive.content)
+        assertEquals("33", json["os_version"]!!.jsonPrimitive.content)
+        assertEquals("1.0.0", json["app_version"]!!.jsonPrimitive.content)
+        assertEquals("7-12", json["age_band"]!!.jsonPrimitive.content)
+
+        captureClient.close()
+    }
+
+    /**
+     * Default behavior of [PairingManager.childFirstNameProvider] is
+     * `{ null }` — there is no production UI for the child's name in the
+     * current pairing flow. The wire-shape contract requires the FIELD
+     * to be present in the JSON body, even when its value is null; the
+     * server-side `trimmed.length < 1` validation is enforced by the
+     * real Supabase edge function and would be caught there, not in
+     * this unit-test layer. This pins down "key present, value null"
+     * as the current contract until the device-side capture UX lands.
+     */
+    @Test
+    fun pairWithCode_request_body_contains_child_first_name_key_when_provider_defaults_to_null() = runTest {
+        val capturedBody = AtomicReference<String?>(null)
+        val captureEngine = MockEngine { request ->
+            capturedBody.set((request.body as TextContent).text)
+            respond(
+                content = ByteReadChannel(
+                    """{"device_id":"<uuid-device>","parent_id":"<uuid-parent>"}"""
+                ),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val captureClient = HttpClient(captureEngine) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        every { mockClientProvider.httpClient } returns captureClient
+
+        val manager = PairingManager.getInstance(context)
+        manager.deviceInfoProvider = {
+            DeviceInfo(
+                deviceName = "TestManufacturer TestModel",
+                deviceModel = "TestModel",
+                osVersion = "33",
+                appVersion = "1.0.0",
+                ageBand = null
+            )
+        }
+        // childFirstNameProvider is left untouched → returns its default `null`.
+
+        val result = manager.pairWithCode("ABCDEFGH")
+
+        assertTrue("Expected Success, got $result", result is PairingResult.Success)
+        val body = capturedBody.get()
+        assertNotNull("MockEngine MUST capture the request body", body)
+        val obj: JsonObject = Json.parseToJsonElement(body!!).jsonObject
+        assertTrue(
+            "child_first_name MUST be a key in the JSON body even when the " +
+                "provider returns null — got body=$body",
+            "child_first_name" in obj
+        )
+        assertTrue(
+            "Default provider returns null → serialized value should be JsonNull",
+            obj["child_first_name"] is JsonNull
+        )
+        assertNull(
+            "Default provider returns null → JsonPrimitive.contentOrNull should be null",
+            obj["child_first_name"]?.jsonPrimitive?.contentOrNull
+        )
+
+        captureClient.close()
     }
 }
