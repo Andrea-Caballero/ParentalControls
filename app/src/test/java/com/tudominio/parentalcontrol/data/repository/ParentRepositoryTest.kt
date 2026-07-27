@@ -24,6 +24,8 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -267,6 +269,47 @@ class ParentRepositoryTest {
         assertTrue("Body should contain device_name, got: $body", body.contains("\"device_name\":\"GalaxyTab\""))
         assertTrue("Body should contain age_band, got: $body", body.contains("\"age_band\":\"13-17\""))
         assertTrue("Body should contain ttl_minutes, got: $body", body.contains("\"ttl_minutes\":15"))
+    }
+
+    /**
+     * Regression test for the manual `setBody("{\"device_name\":\"$deviceName\", ...}")`
+     * interpolation that previously corrupted the JSON body whenever
+     * `deviceName` or `ageBand` contained characters needing escaping
+     * (quotes, backslashes, control chars). With serializer-backed JSON,
+     * the wire body must round-trip through a JSON parser with the input
+     * strings restored verbatim.
+     */
+    @Test
+    fun createPairingCode_escapes_special_characters_in_request_body() = runTest {
+        val trickyDeviceName = "S21 \"Pro\" edition\\2026"
+        val trickyAgeBand = "7\t-\n12"
+        val ttl = 15
+
+        val result = repository.createPairingCode(
+            deviceName = trickyDeviceName,
+            ageBand = trickyAgeBand,
+            ttlMinutes = ttl
+        )
+
+        assertTrue("Expected success, got $result", result.isSuccess)
+        assertEquals(1, captured.size)
+        val body = requestBodyText(captured.first())
+        val parsed = Json.parseToJsonElement(body).jsonObject
+        assertEquals(
+            "device_name must round-trip with quotes and backslash preserved",
+            trickyDeviceName,
+            parsed["device_name"]?.jsonPrimitive?.content
+        )
+        assertEquals(
+            "age_band must round-trip with tab and newline preserved",
+            trickyAgeBand,
+            parsed["age_band"]?.jsonPrimitive?.content
+        )
+        assertEquals(
+            "ttl_minutes must be encoded as a JSON number, not a string",
+            ttl.toString(),
+            parsed["ttl_minutes"]?.jsonPrimitive?.content
+        )
     }
 
     /**
