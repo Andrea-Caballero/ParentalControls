@@ -1,5 +1,6 @@
 package com.tudominio.parentalcontrol.pairing
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -54,10 +55,15 @@ class PairingViewModelAdminGateTest {
         Dispatchers.resetMain()
     }
 
+    private fun newVm(
+        context: android.content.Context = ApplicationProvider.getApplicationContext(),
+        savedState: SavedStateHandle = SavedStateHandle()
+    ): PairingViewModel = PairingViewModel(context, savedState)
+
     @Test
     fun `child first name is sanitized and provided to pairing manager`() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val vm = PairingViewModel(context)
+        val vm = newVm(context)
 
         vm.updateChildFirstName("  Lucía_123! ")
 
@@ -66,9 +72,57 @@ class PairingViewModelAdminGateTest {
     }
 
     @Test
+    fun `child first name is restored from SavedStateHandle`() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        // Simulate process death + restoration: the OS hands the new
+        // ViewModel a SavedStateHandle already populated with the
+        // previously persisted value.
+        val restored = newVm(
+            context,
+            SavedStateHandle(mapOf(PairingViewModel.KEY_CHILD_FIRST_NAME to "Lucía"))
+        )
+
+        assertEquals(
+            "childFirstName must be rehydrated from SavedStateHandle, " +
+                "not reset to blank, so the pairing flow survives " +
+                "ViewModel recreation / process death.",
+            "Lucía",
+            restored.childFirstName.value
+        )
+        // The PairingManager provider was wired in init { } and must
+        // also see the restored value — otherwise the QR/manual
+        // start-gate would block pairing.
+        assertEquals(
+            "Lucía",
+            PairingManager.getInstance(context).childFirstNameProvider()
+        )
+    }
+
+    @Test
+    fun `manual code is restored from SavedStateHandle`() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val savedState = SavedStateHandle()
+        val original = newVm(context, savedState)
+
+        original.updateManualCode("ab-cd 1234!")
+        val restored = newVm(
+            context,
+            SavedStateHandle(
+                mapOf(
+                    PairingViewModel.KEY_MANUAL_CODE to
+                        savedState.get<String>(PairingViewModel.KEY_MANUAL_CODE)
+                )
+            )
+        )
+
+        assertEquals("ABCD1234", restored.manualCode.value)
+    }
+
+    @Test
     fun `pairing actions remain idle without child first name`() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val vm = PairingViewModel(context)
+        val vm = newVm(context)
 
         vm.startQrPairing()
         assertEquals(PairingUiState.Idle, vm.uiState.value)
@@ -79,7 +133,7 @@ class PairingViewModelAdminGateTest {
     @Test
     fun `success handled does not auto-emit NavigateToHome`() = runTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val vm = PairingViewModel(context)
+        val vm = newVm(context)
         vm.simulateSuccess("dev-1")
 
         assertEquals(
@@ -102,7 +156,7 @@ class PairingViewModelAdminGateTest {
     @Test
     fun `confirmAdminDecisionAndNavigate emits exactly one NavigateToHome`() = runTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val vm = PairingViewModel(context)
+        val vm = newVm(context)
         vm.simulateSuccess("dev-1")
         // Background collector + await pattern: the collector subscribes
         // before the emit, then we await the resulting List to keep
@@ -129,7 +183,7 @@ class PairingViewModelAdminGateTest {
     @Test
     fun `uiState stays Success after confirmAdminDecisionAndNavigate`() = runTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val vm = PairingViewModel(context)
+        val vm = newVm(context)
         vm.simulateSuccess("dev-1")
         val job = kotlinx.coroutines.GlobalScope.launch(
             kotlinx.coroutines.Dispatchers.Unconfined
