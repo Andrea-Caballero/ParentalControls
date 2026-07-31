@@ -297,7 +297,15 @@ class ChildStatusViewModel @Inject constructor(
     private fun loadPendingRequest() {
         viewModelScope.launch {
             try {
-                val pending = timeRequestDao.getPendingRequestsFlow()
+                val deviceId = authManager.deviceId.value
+                if (deviceId.isNullOrBlank()) {
+                    // Without an authenticated device id we cannot scope
+                    // the query safely — clear and bail out so we never
+                    // surface another child's pending request.
+                    _pendingTimeRequest.value = null
+                    return@launch
+                }
+                val pending = timeRequestDao.getPendingRequestsForDeviceFlow(deviceId)
                     .first()
                     .firstOrNull { it.status == "PENDING" }
                 _pendingTimeRequest.value = pending
@@ -310,7 +318,13 @@ class ChildStatusViewModel @Inject constructor(
     private fun loadRewardBalance() {
         viewModelScope.launch {
             try {
-                val balance = rewardManager.getRewardBalance()
+                val deviceId = authManager.deviceId.value
+                if (deviceId.isNullOrBlank()) {
+                    _rewardBalance.value = 0L
+                    _lastKnownRewardBalance = 0L
+                    return@launch
+                }
+                val balance = rewardManager.getRewardBalance(deviceId)
                 _rewardBalance.value = balance
 
                 if (balance > _lastKnownRewardBalance && _lastKnownRewardBalance > 0) {
@@ -348,9 +362,29 @@ class ChildStatusViewModel @Inject constructor(
     fun requestExtraTime(minutes: Int, reason: String) {
         viewModelScope.launch {
             try {
+                val deviceId = authManager.deviceId.value
+                if (deviceId.isNullOrBlank()) {
+                    // Without an authenticated device id we cannot
+                    // persist a request that points back to this device —
+                    // inserting a blank `device_id` would either be
+                    // silently filtered by the device-scoped pending
+                    // query or, worse, leak into another child's UI.
+                    Log.e(
+                        TAG,
+                        "requestExtraTime: missing device id, refusing " +
+                            "to insert a malformed time request " +
+                            "(minutes=$minutes)"
+                    )
+                    _events.emit(
+                        ChildStatusEvent.Error(
+                            "No se pudo identificar el dispositivo"
+                        )
+                    )
+                    return@launch
+                }
                 val request = TimeRequestEntity(
                     request_id = java.util.UUID.randomUUID().toString(),
-                    device_id = "",
+                    device_id = deviceId,
                     package_name = null,
                     minutes_requested = minutes,
                     reason = reason,
@@ -374,6 +408,32 @@ class ChildStatusViewModel @Inject constructor(
 
     fun onRepairTapped(cause: DegradationAlertManager.DegradationCause) {
         degradationAlertManager.onRepairTapped(cause.issueType)
+    }
+
+    /**
+     * Process-death safe reconciliation hook — invoked from
+     * [ChildStatusScreen]'s startup `LaunchedEffect(lockManager)` AND
+     * the activity-result launcher. The DeviceAdminPromptCoordinator
+     * is in-memory; the OS restarts it Idle after process death, so
+     * the banner would stay hidden even when Device Admin is
+     * inactive. This method re-derives the banner state from the
+     * actual system admin state at every cold start:
+     *  - active=true → markAdminActive() → Idle → banner hidden.
+     *  - active=false → recordFreshPairing() → Idle becomes
+     *    NeedsActivation (banner visible). recordFreshPairing's
+     *    existing guard preserves Dismissed(skipUsed=true) so a user
+     *    who already chose "Más tarde" still sees the banner
+     *    instead of a fresh re-prompt.
+     *
+     * No SharedPreferences persistence — the source of truth is
+     * lockManager.isAdminActive() queried at ChildStatus startup.
+     */
+    fun syncDeviceAdminState(active: Boolean) {
+        if (active) {
+            adminCoordinator.markAdminActive()
+        } else {
+            adminCoordinator.recordFreshPairing()
+        }
     }
 
     fun dismissRecoveryDialog() {

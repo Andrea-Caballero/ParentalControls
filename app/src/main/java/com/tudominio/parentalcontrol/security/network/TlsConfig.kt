@@ -1,8 +1,8 @@
 package com.tudominio.parentalcontrol.security.network
 
 import android.content.Context
-import android.os.Build
 import android.util.Log
+import com.tudominio.parentalcontrol.BuildConfig
 import com.tudominio.parentalcontrol.network.SupabaseClientProvider
 import okhttp3.CertificatePinner
 import okhttp3.ConnectionSpec
@@ -12,12 +12,17 @@ import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
+
+internal data class SupabaseCertificatePins(
+    val primary: String,
+    val secondary: String,
+    val backupCa: String
+)
 
 /**
  * Configuración de seguridad de red para TLS 1.3 y Certificate Pinning.
- * 
+ *
  * §0.9: Publishable keys separation - el pinning está configurado con pines
  * del backend, no del cliente.
  */
@@ -47,20 +52,64 @@ object NetworkSecurityConfig {
     private const val WRITE_TIMEOUT_SECONDS = 30L
 
     /**
+     * Pines suministrados por el BuildConfig generado por Gradle para esta variante.
+     */
+    internal fun configuredSupabasePins(): SupabaseCertificatePins {
+        return SupabaseCertificatePins(
+            primary = BuildConfig.SUPABASE_PIN_PRIMARY,
+            secondary = BuildConfig.SUPABASE_PIN_SECONDARY,
+            backupCa = BuildConfig.SUPABASE_PIN_BACKUP_CA
+        )
+    }
+
+    /**
+     * Devuelve true solo cuando todos los valores configurados son pines SHA-256 reales.
+     * Los valores con un solo carácter repetido se tratan como placeholders, incluidos
+     * los valores seguros por defecto usados por el script de Gradle.
+     */
+    internal fun areSupabasePinsConfigured(
+        pins: SupabaseCertificatePins = configuredSupabasePins()
+    ): Boolean {
+        return listOf(pins.primary, pins.secondary, pins.backupCa)
+            .all(::isConfiguredPin)
+    }
+
+    private fun isConfiguredPin(pin: String): Boolean {
+        val normalizedPin = pin.trim()
+        if (!SHA256_PIN_PATTERN.matches(normalizedPin)) return false
+
+        val encodedDigest = normalizedPin.removePrefix("sha256/").removeSuffix("=")
+        return encodedDigest.toSet().size > 1
+    }
+
+    private val SHA256_PIN_PATTERN = Regex("^sha256/[A-Za-z0-9+/]{43}=$")
+
+    /**
      * Crea un OkHttpClient configurado con TLS 1.3 y certificate pinning.
-     * 
+     *
      * Esta configuración:
      * - Fuerza TLS 1.3 (TLS 1.2 como fallback mínimo)
      * - Implementa certificate pinning para el dominio de Supabase
      * - Usa un SSLContext configurado correctamente
      */
     fun createSecureOkHttpClient(context: Context): OkHttpClient {
+        return createSecureOkHttpClient(context, configuredSupabasePins())
+    }
+
+    internal fun createSecureOkHttpClient(
+        context: Context,
+        pins: SupabaseCertificatePins
+    ): OkHttpClient {
+        check(areSupabasePinsConfigured(pins)) {
+            "Supabase certificate pins are missing, malformed, or still placeholders"
+        }
+
         Log.d(TAG, "Creando OkHttpClient con TLS 1.3 y Certificate Pinning")
 
         val sslContext = createSslContext()
         val trustManager = createTrustManager()
 
-        val certificatePinner = buildCertificatePinner()
+        val certificatePinner = buildCertificatePinner(pins)
 
         val connectionSpec = buildConnectionSpec()
 
@@ -107,46 +156,21 @@ object NetworkSecurityConfig {
 
     /**
      * Construye el CertificatePinner para Supabase.
-     * 
-     * PLAN DE ROTACIÓN DE PINES:
-     * ==========================
-     * 
-     * Los pines se obtienen del certificado SHA-256 del servidor.
-     * Para obtener los pines:
-     *   openssl s_client -servername YOUR_PROJECT.supabase.co -connect YOUR_PROJECT.supabase.co:443 \
-     *     | openssl x509 -noout -fingerprint -sha256
-     * 
-     * ROTACIÓN (cada 90 días):
-     * 1. Generar nuevo certificado con CA válida
-     * 2. Calcular nuevo pin SHA-256 del certificado
-     * 3. Actualizar PIN_SECONDARY con el nuevo pin
-     * 4. Esperar 30 días (permite a todos los clientes recibir actualización)
-     * 5. Actualizar PIN_PRIMARY con el nuevo pin
-     * 6. Esperar 30 días
-     * 7. Remover PIN_SECONDARY antiguo
-     * 
-     * FORMATO DE PIN:
-     *   sha256/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=
-     * 
-     * PINES ACTUALES (a reemplazar con pines reales del proyecto):
-     * - PIN_PRIMARY: Primer pin del certificado actual
-     * - PIN_SECONDARY: Pin de backup (certificado antiguo o CA intermedia)
-     * - PIN_BACKUP_CA: Pin de la CA raíz (fallback)
+     *
+     * Los pines se suministran por BuildConfig desde Gradle para que cada
+     * entorno pueda configurar su propia rotación sin modificar el código.
      */
-    private fun buildCertificatePinner(): CertificatePinner {
+    private fun buildCertificatePinner(pins: SupabaseCertificatePins): CertificatePinner {
         val supabaseHost = SupabaseClientProvider.SUPABASE_URL
             .removePrefix("https://")
             .removePrefix("http://")
 
-        // Pines para el dominio de Supabase
-        // ⚠️ NOTA: Estos son pines de ejemplo. Reemplazar con pines reales del proyecto.
-        // Para obtener los pines reales, ver ROTATION_PLAN.md
         return CertificatePinner.Builder()
-            .add(supabaseHost, Pins.PIN_PRIMARY)
-            .add(supabaseHost, Pins.PIN_SECONDARY)
-            .add(supabaseHost, Pins.PIN_BACKUP_CA)
+            .add(supabaseHost, pins.primary)
+            .add(supabaseHost, pins.secondary)
+            .add(supabaseHost, pins.backupCa)
             // Dominio alternativo si existe
-            .add("*.supabase.co", Pins.PIN_BACKUP_CA)
+            .add("*.supabase.co", pins.backupCa)
             .build()
     }
 
@@ -196,22 +220,22 @@ object NetworkSecurityConfig {
     /**
      * Valida que el certificado coincida con los pines configurados.
      * Útil para testing y verificación manual.
-     * 
+     *
      * @param certificateChain Cadena de certificados del servidor
      * @return true si al menos un certificado coincide con algún pin
      */
     fun validateCertificateChain(certificateChain: List<X509Certificate>): Boolean {
         if (certificateChain.isEmpty()) return false
 
-        val certificatePinner = buildCertificatePinner()
-        
+        val certificatePinner = buildCertificatePinner(configuredSupabasePins())
+
         return try {
             // El primer certificado es el del servidor
             val serverCertificate = certificateChain.first()
             val publicKey = serverCertificate.publicKey
-            
+
             // Verificar contra pines (esto es simplificado, OkHttp hace la validación real)
-            Pins.PIN_PRIMARY.isNotEmpty() && Pins.PIN_SECONDARY.isNotEmpty()
+            areSupabasePinsConfigured()
         } catch (e: Exception) {
             Log.e(TAG, "Error validando certificado: ${e.message}")
             false
@@ -219,49 +243,11 @@ object NetworkSecurityConfig {
     }
 
     private object Pins {
-        const val TAG = "NetworkSecurityConfig"
-        
         /**
          * Versión de TLS configurada.
          * TLS 1.3 es el estándar actual, TLS 1.2 es fallback mínimo.
          */
         const val TLS_CONFIG_VERSION = "TLSv1.3"
-
-        // =====================================================================
-        // PLAN DE ROTACIÓN DE PINES
-        // =====================================================================
-        // 
-        // ⚠️ IMPORTANTE: Reemplazar estos pines con los pines reales del proyecto.
-        // 
-        // Para obtener los pines de Supabase:
-        // 1. Ve a https://supabase.com/dashboard
-        // 2. Selecciona tu proyecto
-        // 3. Ve a Settings > API
-        // 4. Busca "Certificate SSL Pin" o ejecuta:
-        //    openssl s_client -servername TU_PROYECTO.supabase.co -connect TU_PROYECTO.supabase.co:443 \
-        //      | openssl x509 -noout -fingerprint -sha256
-        //
-        // FORMATO: sha256/Base64EncodedSHA256Thumbprint=
-        //
-        // =====================================================================
-
-        /**
-         * Pin primario del certificado de Supabase.
-         * Este debe coincidir con el certificado actual del servidor.
-         */
-        const val PIN_PRIMARY = "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-
-        /**
-         * Pin secundario (backup).
-         * Usado durante rotación de certificados o como fallback.
-         */
-        const val PIN_SECONDARY = "sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
-
-        /**
-         * Pin de la CA raíz.
-         * Fallback de último recurso para cuando la CA expira o cambia.
-         */
-        const val PIN_BACKUP_CA = "sha256/CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="
     }
 }
 
@@ -281,7 +267,7 @@ class CertificatePinningException(
 
     override fun toString(): String {
         return "CertificatePinningException: $message\n" +
-                "  Hostname: $hostname\n" +
-                "  Certificate Fingerprint: $certificateFingerprint"
+            "  Hostname: $hostname\n" +
+            "  Certificate Fingerprint: $certificateFingerprint"
     }
 }

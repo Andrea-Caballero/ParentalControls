@@ -26,6 +26,18 @@ import java.time.Instant
  *    WorkManager applies its exponential backoff
  *  - PermanentFailure (4xx other than 408/429) → mark processed and log
  *    a warning so the row does not loop forever
+ *
+ * Goal 1 (outbox/sync remediation): the drainer uses the
+ * claim/in-flight mechanism via [OutboxManager.claimPendingItems] so
+ * a concurrent drainer (the legacy `SyncManager.drainOutbox` path
+ * called from `SyncWorker` / `enqueue`) cannot double-send a row
+ * the worker is in the middle of sending. Each claimed row is
+ * finalized via [OutboxManager.markProcessedFromClaim] or
+ * [OutboxManager.incrementRetriesFromClaim] which clear the
+ * `in_flight` flag atomically with the terminal write. Rows that
+ * were claimed by a drainer that crashed before finalizing are
+ * recovered by the stale-claim sweep inside
+ * [OutboxManager.claimPendingItems].
  */
 @HiltWorker
 class OutboxDrainer @AssistedInject constructor(
@@ -54,25 +66,27 @@ class OutboxDrainer @AssistedInject constructor(
         // caller ever wrote to (see SyncManager.kt history). With the Hilt
         // injection that regression is closed at the type level.
 
-        val pending = outboxManager.getPendingItems(
+        val now = Instant.now().toString()
+        val claimed = outboxManager.claimPendingItems(
             maxAttempts = MAX_RETRY_ATTEMPTS,
-            limit = PENDING_BATCH_SIZE
+            limit = PENDING_BATCH_SIZE,
+            now = now
         )
-        if (pending.isEmpty()) {
+        if (claimed.isEmpty()) {
             Log.d(TAG, "Sin items pendientes, fast success")
             return@withContext Result.success()
         }
 
         var sawRetryable = false
-        for (item in pending) {
+        for (item in claimed) {
             val result = syncManager.sendOutboxItem(item)
-            val now = Instant.now().toString()
+            val finalizedAt = Instant.now().toString()
             when (result) {
                 is OutboxSendResult.Success -> {
-                    outboxManager.markProcessed(item.id, now)
+                    outboxManager.markProcessedFromClaim(item.id, finalizedAt)
                 }
                 is OutboxSendResult.RetryableFailure -> {
-                    outboxManager.incrementRetries(item.id)
+                    outboxManager.incrementRetriesFromClaim(item.id)
                     sawRetryable = true
                     Log.w(
                         TAG,
@@ -83,7 +97,7 @@ class OutboxDrainer @AssistedInject constructor(
                     // Spec: mark processed to avoid an infinite retry loop on
                     // poison rows. The `failed` flag in payload is recorded
                     // by the edge function (out of scope for PR 3).
-                    outboxManager.markProcessed(item.id, now)
+                    outboxManager.markProcessedFromClaim(item.id, finalizedAt)
                     Log.w(
                         TAG,
                         "Permanent failure para outbox ${item.id}: HTTP ${result.statusCode}"

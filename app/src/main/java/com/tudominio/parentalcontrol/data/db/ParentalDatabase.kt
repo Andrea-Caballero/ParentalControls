@@ -37,7 +37,7 @@ import com.tudominio.parentalcontrol.data.model.UsageTodayEntity
         TimeRequestEntity::class,
         BehavioralEventEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -129,6 +129,45 @@ abstract class ParentalDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE policy ADD COLUMN device_state TEXT NOT NULL DEFAULT 'ACTIVE'"
+                )
+            }
+        }
+
+        /**
+         * Outbox/sync remediation slice — Migration v8 → v9.
+         *
+         * `outbox` gains two columns for the in-flight claim mechanism:
+         *  - `in_flight INTEGER NOT NULL DEFAULT 0` — true while a
+         *    drainer has selected the row and is sending it. Prevents
+         *    the `OutboxDrainer` worker and the legacy
+         *    `SyncManager.drainOutbox` path from picking the same row
+         *    and double-sending it.
+         *  - `in_flight_at TEXT` — ISO-8601 stamp set when
+         *    `in_flight` flips to true; the stale-claim sweeper uses
+         *    it to recover rows whose drainer crashed before clearing
+         *    the flag.
+         *
+         * `time_requests` gains one column for the server-id split:
+         *  - `server_id TEXT` — Supabase-assigned id from
+         *    `return=representation`. Populated by
+         *    `SyncManager.sendOutboxItem` when the response carries a
+         *    different id. `pullApprovedRequests` looks up by
+         *    `server_id` first, then by `request_id`. Splitting the
+         *    two columns is non-destructive: the prior reconciliation
+         *    renamed `request_id` in place, which raced with the
+         *    parent's approval arriving before the rename and broke
+         *    `GrantEntity.request_id` soft-FK consistency.
+         */
+        val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE outbox ADD COLUMN in_flight INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE outbox ADD COLUMN in_flight_at TEXT"
+                )
+                db.execSQL(
+                    "ALTER TABLE time_requests ADD COLUMN server_id TEXT"
                 )
             }
         }

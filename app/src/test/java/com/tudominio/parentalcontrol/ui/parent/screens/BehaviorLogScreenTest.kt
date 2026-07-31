@@ -201,10 +201,11 @@ class BehaviorLogScreenTest {
             dao,
             authManager
         )
+        val pendingVm = BehaviorLogViewModel(pendingRepo, authManager)
         composeTestRule.setContent {
             ParentalControlTheme {
                 BehaviorLogScreen(
-                    BehaviorLogViewModel(pendingRepo, authManager),
+                    pendingVm,
                     onNavigateBack = {}
                 )
             }
@@ -216,10 +217,11 @@ class BehaviorLogScreenTest {
     @Test
     fun behavior_log_error_state_shows_error_banner_on_refresh_failure() = runTest {
         val failRepo = newRepo(responseBody = "boom", status = HttpStatusCode.InternalServerError)
+        val failVm = BehaviorLogViewModel(failRepo, authManager)
         composeTestRule.setContent {
             ParentalControlTheme {
                 BehaviorLogScreen(
-                    BehaviorLogViewModel(failRepo, authManager),
+                    failVm,
                     onNavigateBack = {}
                 )
             }

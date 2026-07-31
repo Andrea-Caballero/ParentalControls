@@ -16,6 +16,7 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
@@ -73,6 +74,7 @@ class RealtimeManager private constructor(
     
     // Lifecyle observer
     private var lifecycleOwner: LifecycleOwner? = null
+    private val wsJson = Json { ignoreUnknownKeys = true }
 
     init {
         // Registrar como observer del lifecycle global
@@ -125,6 +127,12 @@ class RealtimeManager private constructor(
     private suspend fun connectWebSocket() {
         val accessToken = authManager.getAccessToken()
             ?: throw IllegalStateException("No access token")
+
+        val deviceId = authManager.deviceId.value
+        if (deviceId.isNullOrBlank()) {
+            Log.w(TAG, "Skipping Realtime connection: no device id")
+            return
+        }
         
         val supabaseUrl = SupabaseClientProvider.SUPABASE_URL
             .replace("https://", "")
@@ -136,7 +144,7 @@ class RealtimeManager private constructor(
                 pingInterval = 30_000
             }
             install(ContentNegotiation) {
-                json(Json { ignoreUnknownKeys = true })
+                json(wsJson)
             }
         }
         
@@ -150,9 +158,9 @@ class RealtimeManager private constructor(
                 Log.d(TAG, "Conectado a Realtime")
                 
                 // Suscribirse a canales relevantes
-                sendSubscription("device:${authManager.deviceId.value}:policy", "1")
-                sendSubscription("device:${authManager.deviceId.value}:grants", "2")
-                sendSubscription("device:${authManager.deviceId.value}:requests", "3")
+                sendSubscription("device:$deviceId:policy", "1")
+                sendSubscription("device:$deviceId:grants", "2")
+                sendSubscription("device:$deviceId:requests", "3")
                 
                 // Escuchar mensajes
                 for (frame in incoming) {
@@ -185,8 +193,7 @@ class RealtimeManager private constructor(
             payload = emptyMap(),
             ref = ref
         )
-        val jsonString = """{"type":"${message.type}","topic":"${message.topic}","event":"${message.event}","ref":"${message.ref}"}"""
-        send(Frame.Text(jsonString))
+        send(Frame.Text(wsJson.encodeToString(message)))
     }
 
 

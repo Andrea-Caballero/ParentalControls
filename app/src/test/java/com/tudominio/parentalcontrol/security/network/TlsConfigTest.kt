@@ -1,19 +1,22 @@
 package com.tudominio.parentalcontrol.security.network
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.tudominio.parentalcontrol.BuildConfig
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
-import org.junit.Assert.fail
+import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.security.cert.X509Certificate
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.io.File
 
 /**
  * Tests para la configuración de seguridad de red (T22).
- * 
+ *
  * Verifica:
  * - TLS 1.3 como versión mínima
  * - Certificate pinning configurado
@@ -42,63 +45,144 @@ class TlsConfigTest {
     }
 
     @Test
+    fun `supabase pins mirror BuildConfig values`() {
+        val pins = NetworkSecurityConfig.configuredSupabasePins()
+
+        assertEquals(BuildConfig.SUPABASE_PIN_PRIMARY, pins.primary)
+        assertEquals(BuildConfig.SUPABASE_PIN_SECONDARY, pins.secondary)
+        assertEquals(BuildConfig.SUPABASE_PIN_BACKUP_CA, pins.backupCa)
+    }
+
+    @Test
+    fun `gradle properties feed BuildConfig pin fields`() {
+        val source = File("build.gradle.kts").readText()
+
+        assertTrue(source.contains("findProperty(\"supabasePinPrimary\")"))
+        assertTrue(source.contains("findProperty(\"supabasePinSecondary\")"))
+        assertTrue(source.contains("findProperty(\"supabasePinBackupCa\")"))
+        assertTrue(source.contains("SUPABASE_PIN_PRIMARY"))
+        assertTrue(source.contains("SUPABASE_PIN_SECONDARY"))
+        assertTrue(source.contains("SUPABASE_PIN_BACKUP_CA"))
+        assertTrue(source.contains("buildConfigField(\"String\", \"SUPABASE_PIN_PRIMARY\""))
+        assertTrue(source.contains("buildConfigField(\"String\", \"SUPABASE_PIN_SECONDARY\""))
+        assertTrue(source.contains("buildConfigField(\"String\", \"SUPABASE_PIN_BACKUP_CA\""))
+        assertTrue(source.contains("defaultSupabasePinPrimary"))
+        assertTrue(source.contains("defaultSupabasePinSecondary"))
+        assertTrue(source.contains("defaultSupabasePinBackupCa"))
+    }
+
+    @Test
     fun `timeouts are configured`() {
         // Verificar que las constantes de timeout existen
         val connectTimeout = 30L
         val readTimeout = 30L
         val writeTimeout = 30L
-        
+
         assertEquals(30L, connectTimeout)
         assertEquals(30L, readTimeout)
         assertEquals(30L, writeTimeout)
     }
 }
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class CertificatePinningTest {
 
     @Test
-    fun `pins are defined`() {
-        // Los pines deben estar definidos (aunque sean placeholders)
-        val primaryPin = "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-        val secondaryPin = "sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
-        val backupCaPin = "sha256/CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="
-        
-        assertTrue(primaryPin.startsWith("sha256/"))
-        assertTrue(secondaryPin.startsWith("sha256/"))
-        assertTrue(backupCaPin.startsWith("sha256/"))
+    fun `blank pin prevents secure client construction`() {
+        val exception = assertThrows(IllegalStateException::class.java) {
+            NetworkSecurityConfig.createSecureOkHttpClient(
+                context = testContext(),
+                pins = SupabaseCertificatePins(
+                    primary = "",
+                    secondary = validPin('B'),
+                    backupCa = validPin('C')
+                )
+            )
+        }
+
+        assertTrue(
+            "Unexpected exception message: ${exception.message}",
+            exception.message?.contains("certificate pins") == true
+        )
     }
 
     @Test
-    fun `pin format is correct`() {
-        // Verificar formato: sha256/ + 44 caracteres base64
-        val pinFormat = Regex("^sha256/[A-Za-z0-9+/]{43}=$")
-        
-        val validPin = "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-        assertTrue("Pin should match format", pinFormat.matches(validPin))
+    fun `placeholder pins prevent secure client construction`() {
+        val exception = assertThrows(IllegalStateException::class.java) {
+            NetworkSecurityConfig.createSecureOkHttpClient(
+                context = testContext(),
+                pins = SupabaseCertificatePins(
+                    primary = placeholderPin('A'),
+                    secondary = placeholderPin('B'),
+                    backupCa = placeholderPin('C')
+                )
+            )
+        }
+
+        assertTrue(
+            "Unexpected exception message: ${exception.message}",
+            exception.message?.contains("placeholder") == true
+        )
     }
 
     @Test
-    fun `pins are different`() {
-        val primaryPin = "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-        val secondaryPin = "sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
-        val backupCaPin = "sha256/CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="
-        
-        assertNotEquals(primaryPin, secondaryPin)
-        assertNotEquals(primaryPin, backupCaPin)
-        assertNotEquals(secondaryPin, backupCaPin)
+    fun `default BuildConfig pins control secure client construction`() {
+        if (NetworkSecurityConfig.areSupabasePinsConfigured()) {
+            val client = NetworkSecurityConfig.createSecureOkHttpClient(testContext())
+            assertEquals(4, client.certificatePinner.pins.size)
+        } else {
+            val exception = assertThrows(IllegalStateException::class.java) {
+                NetworkSecurityConfig.createSecureOkHttpClient(testContext())
+            }
+            assertTrue(exception.message?.contains("certificate pins") == true)
+        }
     }
 
     @Test
-    fun `pin has minimum entropy`() {
-        // Verificar que los pines no son todos iguales
-        val pin1 = "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-        val pin2 = "sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
-        
-        val hash1 = pin1.hashCode()
-        val hash2 = pin2.hashCode()
-        
-        assertNotEquals(hash1, hash2)
+    fun `configured pins allow secure client construction`() {
+        val client = NetworkSecurityConfig.createSecureOkHttpClient(
+            context = testContext(),
+            pins = SupabaseCertificatePins(
+                primary = validPin('A'),
+                secondary = validPin('B'),
+                backupCa = validPin('C')
+            )
+        )
+
+        assertEquals(4, client.certificatePinner.pins.size)
     }
+
+    @Test
+    fun `pin validation rejects malformed values`() {
+        assertFalse(
+            NetworkSecurityConfig.areSupabasePinsConfigured(
+                SupabaseCertificatePins(
+                    primary = "sha256/not-a-pin",
+                    secondary = validPin('B'),
+                    backupCa = validPin('C')
+                )
+            )
+        )
+        assertTrue(
+            NetworkSecurityConfig.areSupabasePinsConfigured(
+                SupabaseCertificatePins(
+                    primary = validPin('A'),
+                    secondary = validPin('B'),
+                    backupCa = validPin('C')
+                )
+            )
+        )
+    }
+
+    private fun testContext(): Context =
+        ApplicationProvider.getApplicationContext()
+
+    private fun validPin(seed: Char): String =
+        "sha256/${(seed.toString() + "b").repeat(21)}C="
+
+    private fun placeholderPin(seed: Char): String =
+        "sha256/${seed.toString().repeat(43)}="
 }
 
 class CipherSuitesTest {
@@ -110,7 +194,7 @@ class CipherSuitesTest {
             "TLS_AES_256_GCM_SHA384",
             "TLS_CHACHA20_POLY1305_SHA256"
         )
-        
+
         assertEquals(3, tls13CipherSuites.size)
         assertTrue(tls13CipherSuites.all { it.startsWith("TLS_") })
     }
@@ -125,7 +209,7 @@ class CipherSuitesTest {
             "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
             "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
         )
-        
+
         assertEquals(6, tls12CipherSuites.size)
         assertTrue(tls12CipherSuites.all { it.startsWith("TLS_ECDHE_") })
     }
@@ -143,13 +227,15 @@ class CipherSuitesTest {
             "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
             "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
         )
-        
+
         // Todos terminan en GCM o POLY1305 (AEAD)
-        assertTrue(allCipherSuites.all { 
-            it.endsWith("_GCM_SHA256") || 
-            it.endsWith("_GCM_SHA384") || 
-            it.endsWith("_POLY1305_SHA256") 
-        })
+        assertTrue(
+            allCipherSuites.all {
+                it.endsWith("_GCM_SHA256") ||
+                    it.endsWith("_GCM_SHA384") ||
+                    it.endsWith("_POLY1305_SHA256")
+            }
+        )
     }
 }
 
@@ -164,7 +250,7 @@ class RotationPlanTest {
 
     @Test
     fun `rotation plan has 30 day gap between updates`() {
-        // Entre actualización de PIN_SECONDARY y PIN_PRIMARY
+        // Entre actualización de supabasePinSecondary y supabasePinPrimary
         val gapDays = 30
         assertEquals(30, gapDays)
     }
@@ -175,13 +261,13 @@ class RotationPlanTest {
         val steps = listOf(
             "1. Generar nuevo certificado con CA válida",
             "2. Calcular nuevo pin SHA-256 del certificado",
-            "3. Actualizar PIN_SECONDARY con el nuevo pin",
+            "3. Actualizar supabasePinSecondary con el nuevo pin",
             "4. Esperar 30 días",
-            "5. Actualizar PIN_PRIMARY con el nuevo pin",
+            "5. Actualizar supabasePinPrimary con el nuevo pin",
             "6. Esperar 30 días",
-            "7. Remover PIN_SECONDARY antiguo"
+            "7. Remover supabasePinSecondary antiguo"
         )
-        
+
         assertEquals(7, steps.size)
         assertTrue(steps.first().startsWith("1."))
         assertTrue(steps.last().startsWith("7."))
@@ -195,7 +281,7 @@ class RotationPlanTest {
               -connect YOUR_PROJECT.supabase.co:443 \
               | openssl x509 -noout -fingerprint -sha256
         """.trimIndent()
-        
+
         assertTrue(command.contains("openssl"))
         assertTrue(command.contains("-fingerprint"))
         assertTrue(command.contains("-sha256"))
@@ -211,7 +297,7 @@ class CertificatePinningExceptionTest {
             hostname = "example.supabase.co",
             certificateFingerprint = "sha256/ABC123"
         )
-        
+
         assertEquals("example.supabase.co", exception.hostname)
         assertEquals("sha256/ABC123", exception.certificateFingerprint)
     }
@@ -223,7 +309,7 @@ class CertificatePinningExceptionTest {
             hostname = "example.supabase.co",
             certificateFingerprint = null
         )
-        
+
         assertTrue(exception.message?.contains("MITM") == true)
     }
 
@@ -234,8 +320,8 @@ class CertificatePinningExceptionTest {
             hostname = "example.supabase.co",
             certificateFingerprint = null
         )
-        
-        assertTrue(exception is SecurityException)
+
+        assertTrue(SecurityException::class.java.isAssignableFrom(exception.javaClass))
     }
 }
 

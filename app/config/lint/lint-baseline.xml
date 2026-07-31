@@ -1371,8 +1371,8 @@
         errorLine1="                                    if (mediaImage != null) {"
         errorLine2="                                        ~~~~~~~~~~">
         <location
-            file="src/main/java/com/example/parentalcontrol/pairing/ui/PairingScreen.kt"
-            line="225"
+            file="src/main/java/com/tudominio/parentalcontrol/pairing/ui/PairingScreen.kt"
+            line="250"
             column="41"/>
     </issue>
 
@@ -1382,8 +1382,8 @@
         errorLine1="                                            mediaImage,"
         errorLine2="                                            ~~~~~~~~~~">
         <location
-            file="src/main/java/com/example/parentalcontrol/pairing/ui/PairingScreen.kt"
-            line="227"
+            file="src/main/java/com/tudominio/parentalcontrol/pairing/ui/PairingScreen.kt"
+            line="252"
             column="45"/>
     </issue>
 

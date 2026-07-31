@@ -12,6 +12,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -366,7 +367,7 @@ class AnalyticsManager @Inject constructor(
      */
     private fun encodeProps(props: Map<String, String>): String {
         if (props.isEmpty()) return "{}"
-        return props.entries.joinToString(",", "{", "}") { "\"${it.key}\":\"${it.value}\"" }
+        return JSONObject(props).toString()
     }
 }
 

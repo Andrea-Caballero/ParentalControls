@@ -1,7 +1,6 @@
 # Spec: supabase-backend-integration
 
 ## Purpose
-
 Tech-agnostic acceptance criteria for 5 stubbed remote-backend integration methods in `ParentRepository.kt`. No SDK, protocol, or wire format is prescribed; each Requirement is for a future implementation change.
 
 ## ADDED Requirements
@@ -70,6 +69,34 @@ Applying a policy template SHALL cause the target device's policy to be replaced
 - **WHEN** `lockDevice(...)` or `unlockDevice(...)` is called and the remote service reports a failure,
 - **THEN** the method SHALL signal an error to the caller,
 - **AND** the target device's prior state SHALL remain unchanged (rollback semantics).
+
+### Requirement: Privileged Supabase RPCs are service-only
+The system MUST expose privileged or internal Supabase RPCs only through the service boundary. API roles MUST be denied direct EXECUTE access, and SECURITY DEFINER functions MUST use a pinned search path.
+
+#### Scenario: Service role can call guarded RPCs
+- **GIVEN** a caller operating through the service boundary
+- **WHEN** it invokes a privileged RPC
+- **THEN** the call MUST succeed only if the authorization checks pass
+- **AND** the function search path MUST remain pinned
+
+#### Scenario: API role is blocked from direct access
+- **GIVEN** a public API role
+- **WHEN** it attempts to invoke the same RPC directly
+- **THEN** the call MUST be rejected
+- **AND** no internal helper MUST be reachable
+
+### Requirement: Parent-facing check-in RPCs honor caller identity and RLS
+Parent-facing check-in RPCs MUST validate the authenticated caller and MUST rely on row-level security for ownership checks. A caller MUST NOT check in or mutate a device owned by another parent.
+
+#### Scenario: Parent checks in own device
+- **GIVEN** an authenticated parent and their own device row
+- **WHEN** the check-in RPC is called
+- **THEN** the request MUST succeed only for that owned device
+
+#### Scenario: Cross-parent check-in is rejected
+- **GIVEN** an authenticated parent and a device owned by another parent
+- **WHEN** the check-in RPC is called for that device
+- **THEN** the request MUST be rejected
 
 ## Out of scope
 - Implementation choices (SDK, protocol, encoding); secrets, env config, network layer setup.

@@ -34,6 +34,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
+import com.tudominio.parentalcontrol.pairing.PairingManager
+import com.tudominio.parentalcontrol.pairing.PairingNavigationEvent
 import com.tudominio.parentalcontrol.pairing.PairingUiState
 import com.tudominio.parentalcontrol.pairing.PairingViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -64,17 +66,12 @@ fun PairingScreen(
 
     LaunchedEffect(Unit) {
         viewModel.navigationEvents.collect { event ->
-            when (event) {
-                is com.tudominio.parentalcontrol.pairing.PairingNavigationEvent.NavigateToHome -> {
-                    onPairingComplete()
-                }
-                is com.tudominio.parentalcontrol.pairing.PairingNavigationEvent.OpenParentPanel -> {
-                    Log.d("PairingScreen", "Abrir panel parental")
-                }
-                is com.tudominio.parentalcontrol.pairing.PairingNavigationEvent.GoBack -> {
-                    onCancel()
-                }
-            }
+            handlePairingNavigationEvent(
+                event = event,
+                viewModel = viewModel,
+                onPairingComplete = onPairingComplete,
+                onCancel = onCancel
+            )
         }
     }
 
@@ -82,6 +79,8 @@ fun PairingScreen(
         when (uiState) {
             is PairingUiState.Idle -> {
                 IdleContent(
+                    childFirstName = viewModel.childFirstName.collectAsState().value,
+                    onChildFirstNameChange = viewModel::updateChildFirstName,
                     onQrClick = { viewModel.startQrPairing() },
                     onCodeClick = { viewModel.startManualPairing() },
                     onCancel = onCancel
@@ -120,8 +119,23 @@ fun PairingScreen(
     }
 }
 
+internal fun handlePairingNavigationEvent(
+    event: PairingNavigationEvent,
+    viewModel: PairingViewModel,
+    onPairingComplete: () -> Unit,
+    onCancel: () -> Unit
+) {
+    when (event) {
+        PairingNavigationEvent.NavigateToHome -> onPairingComplete()
+        PairingNavigationEvent.OpenParentPanel -> viewModel.cancel()
+        PairingNavigationEvent.GoBack -> onCancel()
+    }
+}
+
 @Composable
 private fun IdleContent(
+    childFirstName: String,
+    onChildFirstNameChange: (String) -> Unit,
     onQrClick: () -> Unit,
     onCodeClick: () -> Unit,
     onCancel: () -> Unit
@@ -155,10 +169,26 @@ private fun IdleContent(
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = childFirstName,
+            onValueChange = onChildFirstNameChange,
+            label = { Text("Nombre del niño") },
+            placeholder = { Text("Lucía") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Words,
+                imeAction = ImeAction.Next
+            )
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         Button(
             onClick = onQrClick,
+            enabled = childFirstName.isNotBlank(),
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) {
             Text("📷 Escanear código QR")
@@ -168,6 +198,7 @@ private fun IdleContent(
 
         OutlinedButton(
             onClick = onCodeClick,
+            enabled = childFirstName.isNotBlank(),
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) {
             Text("⌨️ Ingresar código manualmente")
@@ -325,6 +356,12 @@ private fun ManualCodeContent(
     onBack: () -> Unit
 ) {
     val manualCode by viewModel.manualCode.collectAsState()
+    // Validate against the same server contract used by the ViewModel
+    // so the "Pair" button and the ViewModel entry point cannot diverge.
+    // Cached as locals to avoid recomputing the regex on every recomposition.
+    val isFullLength = manualCode.length == PairingManager.CODE_LENGTH
+    val isValid = PairingManager.isValidManualCode(manualCode)
+    val showInlineError = isFullLength && !isValid
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -361,7 +398,12 @@ private fun ManualCodeContent(
             value = manualCode,
             onValueChange = { viewModel.updateManualCode(it) },
             label = { Text("Código") },
-            placeholder = { Text("ABCD1234") },
+            // Pre-fix placeholder `ABCD1234` contained `1`, which is NOT
+            // a valid character in the `create-pairing-code` generator
+            // alphabet and would teach the user a wrong example. Use a
+            // valid sample (A-H, J-N, P-Z, 2-9) so the placeholder
+            // itself passes [PairingManager.isValidManualCode].
+            placeholder = { Text("ABCD2345") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(
@@ -373,19 +415,47 @@ private fun ManualCodeContent(
             )
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
+        // Always-visible helper text explaining the allowed alphabet.
+        // Names the excluded characters directly so the user can self-correct
+        // before they finish typing.
         Text(
-            text = "${manualCode.length}/8 caracteres",
+            text = "Solo letras A-H, J-N, P-Z y números 2-9 (sin I, O, 0, 1).",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Length counter (incomplete / valid) OR inline error (8 chars + invalid).
+        // Pre-fix only the length counter was shown, so a full-length invalid
+        // code (e.g. ABCD1234) silently enabled the "Pair" button and the
+        // server-side 400 surfaced later with a confusing raw token.
+        if (showInlineError) {
+            Text(
+                text = "Código no válido. Revisa los caracteres.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        } else {
+            Text(
+                text = "${manualCode.length}/8 caracteres",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
         Button(
             onClick = { viewModel.pairWithManualCode() },
-            enabled = manualCode.length >= 8,
+            // Gate on the shared validator — NOT `length >= 8` — so a
+            // full-length invalid code (e.g. ABCD1234) cannot be submitted
+            // via the button. The ViewModel also re-checks via the same
+            // helper to defend against IME / deeplink / restored-state
+            // bypass paths.
+            enabled = isValid,
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) {
             Text("✅ Emparejar")
@@ -421,11 +491,19 @@ private fun SuccessContent(
 ) {
     val context = LocalContext.current
     val lockManager = remember { com.tudominio.parentalcontrol.admin.LockManager(context) }
-    // WU-D — gating coordinator shared with ChildStatusViewModel so
-    // the same state machine drives the pairing screen gating and
-    // the child status banner. Default to a fresh coordinator in the
-    // test seam; Hilt-injected in production.
-    val coordinator = remember { com.tudominio.parentalcontrol.admin.DeviceAdminPromptCoordinator() }
+    // WU-D follow-up — gating coordinator shared with ChildStatusViewModel
+    // so the same state machine drives the pairing screen gating AND the
+    // child status banner. Read the Hilt-injected @Singleton from the
+    // ViewModel so a "Más tarde" tap on this screen writes to the exact
+    // instance ChildStatusViewModel observes. Pre-fix, the
+    // `remember { DeviceAdminPromptCoordinator() }` here created a
+    // throwaway instance that never reached the banner.
+    //
+    // No `remember { }` is needed: PairingViewModel is the lifetime
+    // owner and `adminCoordinator` is a stable reference for the
+    // whole composition. A `remember { }` here would only mask
+    // regressions that swap the coordinator on the ViewModel side.
+    val coordinator = viewModel.adminCoordinator
 
     var adminChecked by remember { mutableStateOf(false) }
     var adminActive by remember { mutableStateOf(lockManager.isAdminActive()) }
@@ -456,9 +534,15 @@ private fun SuccessContent(
             adminActive = lockManager.isAdminActive()
             adminChecked = true
             if (adminActive) {
-                // Admin already active — record a fresh pairing but
-                // the coordinator stays in Idle, and we proceed.
-                coordinator.recordFreshPairing()
+                // WU-D follow-up — admin already active on a fresh
+                // pairing means the prompt must NOT re-trigger. Pre-fix
+                // this branch called `recordFreshPairing()`, which left
+                // the singleton (configured with adminAlreadyActive=false)
+                // in `NeedsActivation` and surfaced a banner on the
+                // child screen for an admin that was already active.
+                // Use `markAdminActive()` to keep the coordinator in
+                // Idle and proceed.
+                coordinator.markAdminActive()
                 if (!navigating) {
                     navigating = true
                     onAdminConfirmed(viewModel)
@@ -597,7 +681,7 @@ private fun ErrorContent(
             OutlinedButton(onClick = onRequestNew, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Refresh, null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Solicitar nuevo código")
+                Text("Ingresar otro código")
             }
             Spacer(modifier = Modifier.height(8.dp))
         }

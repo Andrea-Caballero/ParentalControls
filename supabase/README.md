@@ -72,37 +72,74 @@ Authorization: Bearer <device_jwt>
 
 ### POST /functions/v1/approve-request
 
-Aprueba una solicitud de tiempo (idempotente).
+Aprueba o rechaza una solicitud de tiempo de forma **atómica** vía la RPC
+`approve_request_atomic` (Postgres). El commit del verdict y la creación del
+grant ocurren en **una sola transacción**; un retry tras un fallo de red no
+puede crear un grant duplicado ni dejar la solicitud aprobada sin grant.
 
 ```
 Authorization: Bearer <parent_jwt>
 ```
 
 ```json
-// Request
+// Request — APPROVE
 {
   "request_id": "uuid-solicitud",
   "minutes": 30,
-  "response_text": "¡Buen trabajo!"
+  "response_text": "¡Buen trabajo!",
+  "action": "APPROVE"   // default si se omite
 }
 
-// Response (200)
+// Request — DENY
+{
+  "request_id": "uuid-solicitud",
+  "action": "DENY",
+  "response_text": "Ahora no"
+}
+
+// Response (200) — APPROVE, primera vez
 {
   "success": true,
+  "decision": "APPROVED",
   "grant_id": "uuid-grant",
   "minutes": 30,
   "expires_at": "2026-06-04T15:30:00Z",
-  "policy_version": 6
+  "policy_version": 6,
+  "idempotent": false
 }
 
-// Idempotent response (si ya fue aprobada)
+// Response (200) — APPROVE, retry idempotente
 {
   "success": true,
-  "idempotent": true,
+  "decision": "APPROVED",
   "grant_id": "uuid-grant-existente",
-  "message": "Solicitud ya aprobada anteriormente"
+  "minutes": 30,
+  "expires_at": "2026-06-04T15:30:00Z",
+  "policy_version": 6,
+  "idempotent": true
 }
+
+// Response (200) — DENY
+{
+  "success": true,
+  "decision": "DENIED",
+  "idempotent": false
+}
+
+// Errores
+// 401: token ausente o inválido
+// 403: el padre autenticado no es el dueño del dispositivo
+// 404: request_id desconocido
+// 409: ALREADY_APPROVED (intento de DENY tras APPROVE) o ALREADY_DENIED (intento de APPROVE tras DENY)
+// 500: la RPC atómica falló; ningún cambio persistió
 ```
+
+**Garantías de atomicidad** (per `supabase/migrations/012_approve_request_atomic.sql`):
+
+- `SELECT ... FOR UPDATE` sobre `time_requests` serializa retries concurrentes; el primer committer gana y el resto recibe la respuesta idempotente con el `grant_id` original.
+- `UNIQUE(grants.request_id)` (constraint `grants_request_id_unique`) impide físicamente un segundo grant para el mismo `request_id`.
+- La RPC hace `UPDATE time_requests` + `INSERT grants` en una sola transacción: o commitea ambos, o no commitea nada.
+- FCM al niño se dispara **solo después** de un commit exitoso. En un fallo de la RPC, no se envía push (el niño no se entera de un cambio que no ocurrió).
 
 ### POST /functions/v1/reward
 
@@ -290,17 +327,17 @@ curl -X POST https://xxx.supabase.co/functions/v1/pairing \
 ### Verificar Idempotencia
 
 ```bash
-# Primera aprobación
+# Primera aprobación (commit atómico: verdict + grant en una transacción)
 curl -X POST https://xxx.supabase.co/functions/v1/approve-request \
   -H "Authorization: Bearer $PARENT_TOKEN" \
   -d '{"request_id":"req-uuid","minutes":30}'
 
-# Segunda aprobación (debe retornar idempotent)
+# Segunda aprobación (debe retornar idempotent: true con el mismo grant_id)
 curl -X POST https://xxx.supabase.co/functions/v1/approve-request \
   -H "Authorization: Bearer $PARENT_TOKEN" \
   -d '{"request_id":"req-uuid","minutes":30}'
 
-# Verificar que solo existe UN grant
+# Verificar que solo existe UN grant (UNIQUE(grants.request_id) lo garantiza en DB)
 SELECT * FROM grants WHERE request_id = 'req-uuid';
 ```
 

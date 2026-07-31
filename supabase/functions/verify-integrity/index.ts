@@ -1,8 +1,15 @@
 // T15: Verify Play Integrity - Edge Function
 // Verifica token de integridad contra Google Play
+//
+// BLK-01 hardening: device_id now comes from the verified user's
+// `app_metadata.device_id` (server-side state set by the pairing
+// flow), not from a manually decoded JWT payload. The service-role
+// client is constructed only after Supabase Auth has cryptographically
+// validated the Bearer token via `supabase.auth.getUser`.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyAuth } from "../_shared/jwt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,31 +19,24 @@ const corsHeaders = {
 // Play Integrity API endpoint
 const PLAY_INTEGRITY_URL = "https://playintegritymanager.googleapis.com/v1";
 
-serve(async (req) => {
+export async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const auth = await verifyAuth({
+    authHeader: req.headers.get("Authorization"),
+    corsHeaders,
+    env: {
+      url: Deno.env.get("SUPABASE_URL") ?? "",
+      anonKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    },
+    requireDevice: true,
+  });
+  if (!auth.ok) return auth.response;
+  const deviceId = auth.deviceId as string;
+
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Token requerido" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const deviceId = payload.device_id;
-
-    if (!deviceId) {
-      return new Response(
-        JSON.stringify({ error: "device_id no encontrado en token" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const { integrity_token } = await req.json();
 
     if (!integrity_token) {
@@ -88,20 +88,39 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    // Log the full error server-side for operators. Return a stable,
+    // generic message to the client — internal exception strings can
+    // leak provider/parser details that aren't actionable for the
+    // caller and may hint at the verifier's internals.
     console.error("Verify integrity error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "INTERNAL_ERROR" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+}
+
+if (import.meta.main) {
+  serve(handleRequest);
+}
+
+/**
+ * Stable, client-facing failure codes. Logged errors include the full
+ * provider/parse exception; the client only ever sees one of these
+ * codes so we never leak internal service-account details, parse
+ * errors, or arbitrary provider error bodies. New entries must be
+ * additive — clients parse `failure_reason` as a string.
+ */
+type IntegrityFailureReason =
+  | "INTEGRITY_PROVIDER_ERROR"
+  | "INTEGRITY_VERDICT_REJECTED";
 
 interface IntegrityVerdict {
   is_valid: boolean;
   device_integrity?: string;
   app_integrity?: string;
   account_details?: string;
-  failure_reason?: string;
+  failure_reason?: IntegrityFailureReason;
 }
 
 async function verifyWithGoogle(integrityToken: string): Promise<IntegrityVerdict> {
@@ -143,11 +162,14 @@ async function verifyWithGoogle(integrityToken: string): Promise<IntegrityVerdic
     );
 
     if (!response.ok) {
+      // Log the full provider response body for operators; the client
+      // only sees the stable failure code so we don't leak Google-side
+      // error envelopes or HTTP status noise into the verdict envelope.
       const errorText = await response.text();
       console.error("Play Integrity API error:", errorText);
       return {
         is_valid: false,
-        failure_reason: `API_ERROR: ${response.status}`,
+        failure_reason: "INTEGRITY_PROVIDER_ERROR",
       };
     }
 
@@ -169,15 +191,22 @@ async function verifyWithGoogle(integrityToken: string): Promise<IntegrityVerdic
       device_integrity: device,
       app_integrity: app,
       account_details: account,
-      failure_reason: !isValid
-        ? `device=${device}, app=${app}, account=${account}`
-        : undefined,
+      // The Play verdict labels (device/app/account) are not
+      // sensitive; surfacing them via `details` lets the client UI
+      // branch on the rejected arm without leaking provider
+      // internals. The `failure_reason` is the stable code only.
+      failure_reason: !isValid ? "INTEGRITY_VERDICT_REJECTED" : undefined,
     };
   } catch (error) {
+    // `error` is typed `unknown` by the ECMAScript spec. Log the raw
+    // value server-side for diagnosis but never include `error.message`
+    // (or any other property) in the client envelope — those can
+    // surface provider stack frames, JSON parse positions, or PEM
+    // fragments from the service-account key.
     console.error("Google verification error:", error);
     return {
       is_valid: false,
-      failure_reason: `EXCEPTION: ${error.message}`,
+      failure_reason: "INTEGRITY_PROVIDER_ERROR",
     };
   }
 }
@@ -204,9 +233,21 @@ async function getGoogleAccessToken(serviceAccount: {
   // Firmar con PKCS1v1.5 (necesario para Google)
   const privateKeyBuffer = derToPem(serviceAccount.private_key);
 
+  // `crypto.subtle.importKey` accepts `BufferSource`. Our helper
+  // returns `Uint8Array<ArrayBufferLike>`, and TypeScript ≥ 5.7's
+  // stricter `ArrayBufferLike` (which now includes `SharedArrayBuffer`)
+  // cannot be widened into the `BufferSource` (typed as `Uint8Array<ArrayBuffer>`)
+  // overload. Copy into a fresh, owned ArrayBuffer so the type narrows
+  // back to `ArrayBuffer` (not the `SharedArrayBuffer` union).
+  const keyBytes = strToArrayBuffer(
+    atob(privateKeyBuffer.replace(/-----.*-----/g, "")),
+  );
+  const keyBuffer = new ArrayBuffer(keyBytes.byteLength);
+  new Uint8Array(keyBuffer).set(keyBytes);
+
   const key = await crypto.subtle.importKey(
     "pkcs8",
-    strToArrayBuffer(atob(privateKeyBuffer.replace(/-----.*-----/g, ""))),
+    keyBuffer,
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
     false,
     ["sign"]

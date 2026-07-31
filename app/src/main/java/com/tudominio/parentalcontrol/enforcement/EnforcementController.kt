@@ -10,6 +10,7 @@ import com.tudominio.parentalcontrol.accessibility.AppMonitorService
 import com.tudominio.parentalcontrol.admin.LockManager
 import com.tudominio.parentalcontrol.auth.DeviceAuthManager
 import com.tudominio.parentalcontrol.data.db.ParentalDatabase
+import com.tudominio.parentalcontrol.data.local.LocalDataSource
 import com.tudominio.parentalcontrol.data.model.AppPolicyEntity
 import com.tudominio.parentalcontrol.data.model.GrantEntity
 import com.tudominio.parentalcontrol.data.model.PolicyEntity
@@ -20,12 +21,17 @@ import com.tudominio.parentalcontrol.domain.*
 import com.tudominio.parentalcontrol.overlay.BlockOverlayService
 import com.tudominio.parentalcontrol.reconciliation.UsageStatsReconciler
 import com.tudominio.parentalcontrol.service.MonitorForegroundService
-import com.tudominio.parentalcontrol.time.DefaultTimeProvider
 import com.tudominio.parentalcontrol.time.TimeProvider
+import com.tudominio.parentalcontrol.time.TrustedTimeState
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
 
 /**
  * Controlador central de enforcement.
@@ -44,6 +50,17 @@ class EnforcementController(
     private val timeProvider: TimeProvider,
     private val authManager: DeviceAuthManager = DeviceAuthManager.getInstance(context),
     private val lockManager: LockManager = LockManager(context),
+    private val usageContextFlowProvider: (String, String) -> Flow<UsageContext> =
+        { deviceId, dateKey -> LocalDataSource(database).getUsageContextFlow(deviceId, dateKey) },
+    private val usageDateFlowProvider: () -> Flow<String> = {
+        // Default seed: emits the current date once. Production wires a date stream
+        // that emits again when midnight rolls over (e.g. an alarm-driven
+        // [MutableSharedFlow]); tests inject a [MutableStateFlow] they control
+        // directly. The flow itself is the only seam — the controller never reads
+        // the wall clock for the date key.
+        flowOf(timeProvider.currentDate().toString())
+    },
+    private val controllerScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
 ) {
     companion object {
         private const val THRESHOLD_RECHECK_MINUTES = 5 // Reevaluar cada 5 minutos
@@ -53,14 +70,17 @@ class EnforcementController(
 
         fun getInstance(context: Context, database: ParentalDatabase): EnforcementController {
             return instance ?: synchronized(this) {
-                instance ?: EnforcementController(context, database, DefaultTimeProvider(context)).also {
+                val timeProvider = EntryPointAccessors.fromApplication(
+                    context.applicationContext,
+                    EnforcementControllerEntryPoint::class.java
+                ).timeProvider()
+                instance ?: EnforcementController(context, database, timeProvider).also {
                     instance = it
                 }
             }
         }
     }
 
-    private val controllerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val reconciler = UsageStatsReconciler(context, database)
     private val deviceOwnerManager = DeviceOwnerManager.getInstance(context)
 
@@ -73,9 +93,6 @@ class EnforcementController(
      * (defensive — the controller is only active when paired, so
      * this is unused in practice).
      */
-    private fun effectiveDeviceId(): String =
-        authManager.deviceId.value ?: "default"
-
     // Estado actual
     private var currentPolicy: Policy? = null
     private var currentGrants: List<Grant> = emptyList()
@@ -83,6 +100,10 @@ class EnforcementController(
     private var lastEvaluatedPackage: String? = null
     private var lastEvaluationTime: Long = 0L
     private var isBlocked = false
+    @Volatile
+    private var currentUsage: UsageContext = UsageContext.empty()
+    private val grantReevaluationGeneration = MutableStateFlow(0L)
+    private var expiryJob: Job? = null
 
     // Flow para decisiones
     private val _decisionFlow = MutableSharedFlow<EnforcementDecision>(replay = 1)
@@ -93,6 +114,7 @@ class EnforcementController(
         loadCurrentPolicy()
         loadGrants()
         loadAppPolicies()
+        loadUsageContext()
     }
 
     /**
@@ -105,12 +127,18 @@ class EnforcementController(
         controllerScope.launch {
             authManager.deviceId
                 .flatMapLatest { id ->
-                    database.policyDao().getPolicyFlow(id ?: "default")
+                    if (id.isNullOrBlank()) {
+                        flowOf(null)
+                    } else {
+                        database.policyDao().getPolicyFlow(id)
+                    }
                 }
                 .collect { entity ->
-                    entity?.let {
-                        currentPolicy = it.toPolicy(currentGrants, currentAppPolicies)
-                        onPolicyDeviceStateChanged(it.device_state)
+                    if (entity == null) {
+                        currentPolicy = null
+                    } else {
+                        currentPolicy = entity.toPolicy(currentGrants, currentAppPolicies)
+                        onPolicyDeviceStateChanged(entity.device_state)
                     }
                 }
         }
@@ -146,13 +174,38 @@ class EnforcementController(
         controllerScope.launch {
             authManager.deviceId
                 .flatMapLatest { id ->
-                    database.appPolicyDao()
-                        .getAppPoliciesForDeviceFlow(id ?: "default")
+                    if (id.isNullOrBlank()) {
+                        flowOf(emptyList())
+                    } else {
+                        database.appPolicyDao().getAppPoliciesForDeviceFlow(id)
+                    }
                 }
                 .collect { entities ->
                     currentAppPolicies = entities.mapNotNull { it.toAppPolicyOrNull() }
                     // Re-evalúa con la política actual ya cargada para que tome los nuevos app policies
                     currentPolicy?.let { currentPolicy = it.copy(app_policies = currentAppPolicies) }
+                }
+        }
+    }
+
+    private fun loadUsageContext() {
+        controllerScope.launch {
+            combine(
+                authManager.deviceId.map { it },
+                usageDateFlowProvider(),
+            ) { id, dateKey -> id to dateKey }
+                .distinctUntilChanged()
+                .flatMapLatest { (id, dateKey) ->
+                    if (id.isNullOrBlank()) {
+                        flowOf(UsageContext.empty())
+                    } else {
+                        usageContextFlowProvider(id, dateKey)
+                    }
+                }
+                .distinctUntilChanged()
+                .collect { usage ->
+                    currentUsage = usage
+                    forceReevaluation()
                 }
         }
     }
@@ -163,16 +216,44 @@ class EnforcementController(
      */
     private fun loadGrants() {
         controllerScope.launch {
-            authManager.deviceId
-                .flatMapLatest { id ->
-                    val now = java.time.Instant.now().toString()
-                    database.grantDao()
-                        .getActiveGrantsFlow(id ?: "default", now)
+            combine(authManager.deviceId, timeProvider.trustedTimeState, grantReevaluationGeneration) {
+                id, state, _ -> id to state
+            }.flatMapLatest { (id, state) ->
+                val now = timeProvider.trustedNow()
+                if (id.isNullOrBlank() || state is TrustedTimeState.Unavailable || now == null) {
+                    flowOf(emptyList())
+                } else {
+                    database.grantDao().getActiveGrantsFlow(id, now.toString())
                 }
-                .collect { entities ->
-                    currentGrants = entities.map { it.toGrant() }
-                    currentPolicy = currentPolicy?.copy(grants = currentGrants)
+            }.collect { entities ->
+                currentGrants = entities.map { it.toGrant() }
+                currentPolicy = currentPolicy?.copy(grants = currentGrants)
+                scheduleGrantExpiry(entities)
+                forceReevaluation()
+            }
+        }
+        controllerScope.launch {
+            timeProvider.trustedTimeState.drop(1).collect { state ->
+                if (state is TrustedTimeState.Unavailable) {
+                    expiryJob?.cancel()
+                    currentGrants = emptyList()
+                    currentPolicy = currentPolicy?.copy(grants = emptyList())
                 }
+                grantReevaluationGeneration.update { it + 1 }
+            }
+        }
+    }
+
+    private fun scheduleGrantExpiry(entities: List<GrantEntity>) {
+        expiryJob?.cancel()
+        val now = timeProvider.trustedNow() ?: return
+        val nextExpiry = entities.mapNotNull { runCatching { Instant.parse(it.expires_at) }.getOrNull() }
+            .filter { it.isAfter(now) }
+            .minOrNull() ?: return
+        val delayMillis = Duration.between(now, nextExpiry).toMillis().coerceAtLeast(1L)
+        expiryJob = controllerScope.launch {
+            delay(delayMillis)
+            grantReevaluationGeneration.update { it + 1 }
         }
     }
 
@@ -194,7 +275,8 @@ class EnforcementController(
         val policy = currentPolicy ?: return
 
         // Evitar reevaluaciones frecuentes
-        if (packageName == lastEvaluatedPackage &&
+        if (lastEvaluationTime != 0L &&
+            packageName == lastEvaluatedPackage &&
             SystemClock.elapsedRealtime() - lastEvaluationTime < 1000
         ) {
             return
@@ -204,8 +286,16 @@ class EnforcementController(
         lastEvaluationTime = SystemClock.elapsedRealtime()
 
         // Evaluar con el motor (T02)
-        val now = LocalDateTime.now(timeProvider.currentZoneId())
-        val decision = evaluar(policy, packageName, UsageContext.empty(), now, timeProvider.currentZoneId())
+        val trustedNow = timeProvider.trustedNow()
+        if (trustedNow == null) {
+            controllerScope.launch {
+                executeDecision(packageName, Decision.Bloquear("Trusted time unavailable"), policy)
+            }
+            return
+        }
+        val now = trustedNow.atZone(timeProvider.currentZoneId()).toLocalDateTime()
+        val usage = currentUsage
+        val decision = evaluar(policy, packageName, usage, now, timeProvider.currentZoneId())
 
         // Ejecutar decisión
         controllerScope.launch {
@@ -379,6 +469,7 @@ class EnforcementController(
      * Fuerza una reevaluación.
      */
     fun forceReevaluation() {
+        lastEvaluationTime = 0L
         lastEvaluatedPackage?.let { evaluateAndEnforce(it) }
     }
 
@@ -494,4 +585,10 @@ private fun Policy.toEntity(): PolicyEntity {
         version = version.toLong(),
         category_assignments = category_assignments
     )
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface EnforcementControllerEntryPoint {
+    fun timeProvider(): TimeProvider
 }

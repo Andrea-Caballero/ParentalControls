@@ -19,10 +19,17 @@ import com.tudominio.parentalcontrol.sync.OutboxSendResult
 import com.tudominio.parentalcontrol.sync.SyncManager
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -183,5 +190,77 @@ class OutboxDrainerTest {
         assertEquals(ListenableWorker.Result.success(), result)
         val pending = db.outboxDao().getPendingItems(10, 50)
         assertEquals(0, pending.size)
+    }
+
+    /**
+     * Goal 1: the worker MUST use the claim/in-flight mechanism so a
+     * second concurrent drainer (or a re-run after a crash that
+     * happened mid-iteration) does not re-send rows the first run is
+     * still in the middle of sending. We prove the worker does the
+     * claim by:
+     *
+     *  1. Inserting 2 rows.
+     *  2. Stubbing `sendOutboxItem` to BLOCK on a deferred
+     *     completion for the first row only. The second row returns
+     *     `Success` immediately.
+     *  3. Asserting that after the worker's first iteration the
+     *     first row is `in_flight = 1` (still being sent).
+     *  4. Completing the deferred; the worker finalizes the first
+     *     row and returns success.
+     */
+    @Test
+    fun drainOutbox_uses_claim_mechanism_to_hold_rows_during_send() = runBlocking {
+        val held = insertOutboxItem()
+        val immediate = insertOutboxItem()
+        val syncManager: SyncManager = mockk(relaxed = false)
+        val firstComplete = CompletableDeferred<Unit>()
+
+        coEvery { syncManager.sendOutboxItem(match { it.id == held.id }) } coAnswers {
+            firstComplete.await()
+            OutboxSendResult.Success
+        }
+        coEvery { syncManager.sendOutboxItem(match { it.id == immediate.id }) } returns
+            OutboxSendResult.Success
+
+        val worker = newWorker(syncManager)
+
+        coroutineScope {
+            val workerJob = async(Dispatchers.IO) {
+                worker.doWork()
+            }
+
+            // Give the worker time to start, claim both rows, and
+            // reach the blocked send on `held`. `immediate` is
+            // processed first (older created_at), so it should
+            // already be processed and `held` should be in_flight=1.
+            withTimeout(5_000) {
+                while (true) {
+                    val rows = db.outboxDao().selectClaimableItems(10, 10)
+                    if (rows.isEmpty() && !firstComplete.isCompleted) {
+                        // Both rows were claimed; immediate is
+                        // already done, held is blocked on the
+                        // deferred.
+                        break
+                    }
+                    delay(20)
+                }
+            }
+
+            val pending = db.outboxDao().getPendingItems(10, 50)
+            assertEquals(
+                "while held is mid-send, only the already-processed row " +
+                    "is invisible to the legacy query — held is held by the claim",
+                0,
+                pending.size
+            )
+            assertTrue(
+                "a concurrent drainer must NOT see `held` while the worker is sending it",
+                db.outboxDao().selectClaimableItems(10, 10).none { it.id == held.id }
+            )
+
+            firstComplete.complete(Unit)
+            val result = withTimeout(5_000) { workerJob.await() }
+            assertEquals(ListenableWorker.Result.success(), result)
+        }
     }
 }

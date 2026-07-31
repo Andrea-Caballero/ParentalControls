@@ -13,6 +13,7 @@ import com.tudominio.parentalcontrol.data.repository.TimeExtraRepository
 import com.tudominio.parentalcontrol.di.SupabaseClient
 import com.tudominio.parentalcontrol.network.ConnectionState
 import com.tudominio.parentalcontrol.network.SupabaseClientProvider
+import com.tudominio.parentalcontrol.time.TimeProvider
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -25,6 +26,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import java.time.ZoneOffset
+import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -113,11 +115,30 @@ private data class ApprovedRequestDto(
     val resolved_at: String? = null
 )
 
+/**
+ * Wire shape of a `time_requests` row that PostgREST returns when
+ * `Prefer: return=representation` is set on the insert. Used by
+ * [SyncManager.sendOutboxItem] to extract the server-assigned id and
+ * write it to `time_requests.server_id` (non-destructively — the
+ * client's `request_id` primary key stays put).
+ *
+ * The mock server and production Supabase both return the inserted
+ * row in this shape. `ignoreUnknownKeys = true` at the call site
+ * tolerates columns the server appends (`device_id`, `reason`,
+ * `status`, `created_at`, `parent_response`).
+ */
+@Serializable
+private data class TimeRequestResponse(
+    val id: String? = null,
+    val request_id: String? = null
+)
+
 @Singleton
 class SyncManager @Inject constructor(
     @ApplicationContext private val context: Context,
     @SupabaseClient private val httpClient: HttpClient,
-    private var database: ParentalDatabase
+    private var database: ParentalDatabase,
+    private val timeProvider: TimeProvider
 ) {
     companion object {
         private const val TAG = "SyncManager"
@@ -249,7 +270,9 @@ class SyncManager @Inject constructor(
         val accessToken = authManager.getAccessToken()
             ?: return@withContext SyncResult.Offline
 
-        val deviceId = authManager.deviceId.value ?: "default"
+        val deviceId = authManager.deviceId.value
+            ?.takeIf { it.isNotBlank() }
+            ?: return@withContext SyncResult.Offline
 
         return@withContext try {
             val localVersion = database.policyDao().getLocalVersion(deviceId) ?: 0L
@@ -270,6 +293,8 @@ class SyncManager @Inject constructor(
                     if (policyResponse.version > localVersion) {
                         applyPolicy(policyResponse, deviceId)
                     }
+
+                    confirmTrustedTime(policyResponse, timeProvider)
 
                     policyResponse.server_time?.let { serverTime ->
                         val localTime = System.currentTimeMillis() / 1000
@@ -374,24 +399,52 @@ class SyncManager @Inject constructor(
             ?: return@withContext SyncResult.Offline
 
         var failedCount = 0
+        val now = java.time.Instant.now().toString()
 
         while (true) {
-            val pendingItems = database.outboxDao().getPendingItems(MAX_RETRY_ATTEMPTS, 50)
-            if (pendingItems.isEmpty()) break
+            // Goal 1: claim/in-flight — SELECT + mark in_flight in one
+            // transaction so a concurrent drainer (the `OutboxDrainer`
+            // worker) cannot pick the same row and double-send it. The
+            // legacy `deleteItem` on success is preserved for backward
+            // compatibility with the pre-claim sync semantics — the
+            // claim is harmless on a hard delete because the row goes
+            // away entirely.
+            val claimed = database.outboxDao().claimPendingItems(
+                MAX_RETRY_ATTEMPTS,
+                50,
+                now
+            )
+            if (claimed.isEmpty()) break
 
-            for (item in pendingItems) {
+            for (item in claimed) {
                 when (sendOutboxItem(item, accessToken)) {
                     is OutboxSendResult.Success ->
+                        // Legacy semantics: hard delete the row on
+                        // success. The canonical `OutboxDrainer` path
+                        // uses `markProcessed` (soft delete) so the
+                        // periodic `deleteProcessedOlderThan` sweeper
+                        // can audit. Both paths now share the claim
+                        // flow, so neither double-sends.
                         database.outboxDao().deleteItem(item.id)
                     is OutboxSendResult.RetryableFailure -> {
-                        database.outboxDao().incrementRetries(item.id)
+                        // Clears in_flight + bumps retries in one
+                        // statement so the row is re-claimable on
+                        // the next cycle.
+                        database.outboxDao().incrementRetriesFromClaim(item.id)
                         failedCount++
                     }
                     is OutboxSendResult.PermanentFailure -> {
-                        // Legacy drain path: leave the row in place and count
-                        // it as a failure. The new [OutboxDrainer] worker is
-                        // the canonical path that marks permanent failures as
-                        // processed (PR 3).
+                        // Clears in_flight + marks processed in one
+                        // statement. The pre-claim legacy behavior
+                        // was to leave the row in place — the next
+                        // drain cycle would re-pick it and loop
+                        // forever. Marking processed aligns with the
+                        // canonical `OutboxDrainer` path and fixes
+                        // the infinite-loop latent bug.
+                        database.outboxDao().markProcessedFromClaim(
+                            item.id,
+                            java.time.Instant.now().toString()
+                        )
                         failedCount++
                     }
                 }
@@ -552,25 +605,22 @@ class SyncManager @Inject constructor(
 
             val result = classifyResponse(response.status)
 
-            // On a successful TIME_REQUEST, swap the local request_id for
-            // the server's id so the post-boot pullApprovedRequests can find
-            // the row when the parent approves. Best-effort: a parse error
-            // here just leaves the local id in place, which falls back to
-            // the pre-fix behavior (pull can see the row but cannot map it).
+            // Goal 3: non-destructive identity reconciliation. On a
+            // successful TIME_REQUEST, parse the `return=representation`
+            // response and write the server's id to `server_id`
+            // WITHOUT renaming the local `request_id`. The pre-v9
+            // reconciliation renamed `request_id` in place, which
+            // (a) raced with the parent's approval arriving before
+            // the rename completed (the pull would query by the
+            // server's id and miss the local row), and (b) broke
+            // `GrantEntity.request_id` soft-FK consistency.
+            //
+            // `pullApprovedRequests` now uses
+            // [com.tudominio.parentalcontrol.data.db.TimeRequestDao.getRequestByRequestIdOrServerId]
+            // which looks up by `server_id` first (post-v9 path) and
+            // falls back to `request_id` (pre-v9 renamed path).
             if (result is OutboxSendResult.Success && isTimeRequest) {
-                try {
-                    val body = response.bodyAsText()
-                    val serverId = Regex("\"id\"\\s*:\\s*\"([^\"]+)\"")
-                        .find(body)?.groupValues?.get(1)
-                    val localId = Regex("\"request_id\"\\s*:\\s*\"([^\"]+)\"")
-                        .find(item.payload_json)?.groupValues?.get(1)
-                    if (serverId != null && localId != null && localId != serverId) {
-                        database.timeRequestDao().updateRequestId(localId, serverId)
-                        Log.d(TAG, "Reconciled local request_id: $localId → $serverId")
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Could not reconcile server id for time request: ${e.message}")
-                }
+                reconcileTimeRequestServerId(item.payload_json, response)
             }
 
             result
@@ -578,6 +628,42 @@ class SyncManager @Inject constructor(
             OutboxSendResult.RetryableFailure(e)
         } catch (e: Exception) {
             OutboxSendResult.RetryableFailure(e)
+        }
+    }
+
+    /**
+     * Parses the `Prefer: return=representation` body of a TIME_REQUEST
+     * insert and writes the server's id to `time_requests.server_id`
+     * when it differs from the client's `request_id`. Best-effort: a
+     * parse error here just leaves `server_id` null, which still
+     * resolves correctly through the `request_id` branch of the
+     * post-boot lookup.
+     */
+    private suspend fun reconcileTimeRequestServerId(
+        payloadJson: String,
+        response: HttpResponse
+    ) {
+        try {
+            val body = response.bodyAsText()
+            val responseJson = Json { ignoreUnknownKeys = true }
+                .decodeFromString<List<TimeRequestResponse>>(body)
+            val serverId = responseJson.firstOrNull()?.id
+                ?: responseJson.firstOrNull()?.request_id
+            if (serverId.isNullOrBlank()) return
+
+            // The local `request_id` is the primary key the client
+            // generated in [TimeExtraRepository.generateRequestId].
+            // We read it from the payload to keep the contract
+            // identical to the pre-v9 flow (payload carries the
+            // authoritative local id).
+            val localId = Regex("\"request_id\"\\s*:\\s*\"([^\"]+)\"")
+                .find(payloadJson)?.groupValues?.get(1)
+            if (localId.isNullOrBlank() || localId == serverId) return
+
+            database.timeRequestDao().setServerId(localId, serverId)
+            Log.d(TAG, "Reconciled time request: local=$localId → server=$serverId")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not reconcile server id for time request: ${e.message}")
         }
     }
 
@@ -602,6 +688,17 @@ class SyncManager @Inject constructor(
     private suspend fun updatePendingCount() {
         _pendingCount.value = database.outboxDao().getPendingCountFlow().first()
     }
+}
+
+internal fun confirmTrustedTime(
+    policyResponse: PolicyPullResponse,
+    timeProvider: TimeProvider
+): Boolean {
+    val serverTime = policyResponse.server_time ?: return false
+    if (serverTime <= 0L) return false
+
+    timeProvider.confirmTrustedTime(Instant.ofEpochSecond(serverTime))
+    return true
 }
 
 /**

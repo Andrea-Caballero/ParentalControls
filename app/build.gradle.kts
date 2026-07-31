@@ -63,6 +63,25 @@ val debugSupabaseAnonKey: String =
     (project.findProperty("supabaseAnonKey") as String?)
         ?: "your-anon-key"
 
+// Certificate pins are build inputs, not application-source constants. Keep
+// recognizable placeholders here so a build without real pins fails closed
+// when the real-cloud client is requested.
+val defaultSupabasePinPrimary =
+    "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+val defaultSupabasePinSecondary =
+    "sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
+val defaultSupabasePinBackupCa =
+    "sha256/CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="
+val supabasePinPrimary: String =
+    (project.findProperty("supabasePinPrimary") as String?)
+        ?: defaultSupabasePinPrimary
+val supabasePinSecondary: String =
+    (project.findProperty("supabasePinSecondary") as String?)
+        ?: defaultSupabasePinSecondary
+val supabasePinBackupCa: String =
+    (project.findProperty("supabasePinBackupCa") as String?)
+        ?: defaultSupabasePinBackupCa
+
 android {
     namespace = "com.tudominio.parentalcontrol"
     compileSdk = 36
@@ -74,6 +93,13 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "com.tudominio.parentalcontrol.MyHiltTestRunner"
+        // Shared-mock defaults are defined here so every build variant
+        // generates the fields. Debug can still override them below.
+        buildConfigField("boolean", "USE_SHARED_MOCK", "false")
+        buildConfigField("String", "SHARED_MOCK_URL", "\"http://10.0.2.2:8787\"")
+        buildConfigField("String", "SUPABASE_PIN_PRIMARY", "\"$supabasePinPrimary\"")
+        buildConfigField("String", "SUPABASE_PIN_SECONDARY", "\"$supabasePinSecondary\"")
+        buildConfigField("String", "SUPABASE_PIN_BACKUP_CA", "\"$supabasePinBackupCa\"")
     }
 
     buildFeatures {
@@ -266,8 +292,12 @@ detekt {
 }
 
 // Configure JVM target for detekt
+// Detekt 1.23.1 only accepts JVM targets up to "20" (its bundled Kotlin
+// compiler predates the JVM_21 LanguageVersion entry). The project
+// compiles with JVM_21 — that still works; this just keeps Detekt from
+// failing outright with "Invalid value (21) passed to --jvm-target".
 tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
-    jvmTarget = "21"
+    jvmTarget = "20"
 }
 
 // =============================================================================

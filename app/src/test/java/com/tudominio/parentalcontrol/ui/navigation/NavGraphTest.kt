@@ -107,6 +107,12 @@ class NavGraphTest {
         every { childStatusViewModel.degradationCauses } returns MutableStateFlow(emptyList())
         every { childStatusViewModel.showRecoveryDialog } returns MutableStateFlow(false)
         every { childStatusViewModel.timeRemaining } returns MutableStateFlow(0L)
+        // WU-D follow-up — ChildStatusScreen now collects
+        // deviceAdminBanner via collectAsState(). Without this stub
+        // the relaxed-mockk returns `Any` (null), and the unchecked
+        // cast to StateFlow<Boolean> blows up when the child device
+        // path composes the screen.
+        every { childStatusViewModel.deviceAdminBanner } returns MutableStateFlow(false)
         // `events` is a SharedFlow that ChildStatusScreen collects inside a
         // LaunchedEffect; stub it with a real (empty) SharedFlow so the
         // collect{} does not blow up on a mockk Object.

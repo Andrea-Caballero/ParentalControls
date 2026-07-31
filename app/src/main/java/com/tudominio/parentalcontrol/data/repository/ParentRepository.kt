@@ -35,6 +35,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -70,6 +71,37 @@ open class ParentRepository @Inject constructor(
         ignoreUnknownKeys = true
         isLenient = true
     }
+
+    @Serializable
+    private data class ApproveRequestBody(
+        val request_id: String,
+        val minutes: Int,
+        val action: String,
+        val response_text: String? = null,
+    )
+
+    @Serializable
+    private data class RenameChildRequestBody(
+        val first_name: String,
+    )
+
+    @Serializable
+    private data class SetDeviceStateRequestBody(
+        val device_id: String,
+        val state: String,
+    )
+
+    @Serializable
+    private data class GetPendingRequestsBody(
+        val device_id: String? = null,
+    )
+
+    @Serializable
+    private data class CreatePairingCodeRequestBody(
+        val device_name: String,
+        val age_band: String,
+        val ttl_minutes: Int,
+    )
 
     /**
      * Process-level cache of the most recent pending-requests fetch
@@ -429,6 +461,8 @@ open class ParentRepository @Inject constructor(
                 val token = authManager.getAccessToken()
                     ?: return@withContext Result.failure(DeviceListError.AuthMissing)
 
+                val requestBody = json.encodeToString(GetPendingRequestsBody())
+
                 val base = "${SupabaseClientProvider.SUPABASE_URL}/rest/v1/time_requests?" +
                     "select=*,devices(device_name)&status=eq.PENDING&order=created_at.desc"
                 val url = if (selectedChildId == null) {
@@ -447,6 +481,12 @@ open class ParentRepository @Inject constructor(
                 val response = clientProvider.httpClient.get(url) {
                     header("Authorization", "Bearer $token")
                     header("apikey", SupabaseClientProvider.SUPABASE_ANON_KEY)
+                    if (selectedChildId == null) {
+                        // `body` keeps the request shape stable for the mock
+                        // and makes the encoding path explicit for future POST
+                        // migrations; GET ignores it.
+                        setBody(requestBody)
+                    }
                 }
 
                 if (!response.status.isSuccess()) {
@@ -455,8 +495,8 @@ open class ParentRepository @Inject constructor(
                     )
                 }
 
-                val body = json.decodeFromString<List<TimeRequestDto>>(response.bodyAsText())
-                Result.success(body.map { it.toTimeRequest() })
+                val responseBody = json.decodeFromString<List<TimeRequestDto>>(response.bodyAsText())
+                Result.success(responseBody.map { it.toTimeRequest() })
             } catch (e: Exception) {
                 Result.failure(DeviceListError.Transient(e.message ?: "Unknown error"))
             }
@@ -562,8 +602,14 @@ open class ParentRepository @Inject constructor(
             val token = authManager.getAccessToken()
                 ?: return@withContext Result.failure(DeviceListError.AuthMissing)
 
-            val responseText = jsonStringOrNull(response)
-            val body = "{\"request_id\":\"$requestId\",\"minutes\":$minutes,\"response_text\":$responseText}"
+            val body = json.encodeToString(
+                ApproveRequestBody(
+                    request_id = requestId,
+                    minutes = minutes,
+                    action = "APPROVE",
+                    response_text = response,
+                )
+            )
 
             val httpResponse = clientProvider.httpClient.post(
                 "${SupabaseClientProvider.SUPABASE_URL}/functions/v1/approve-request"
@@ -612,9 +658,14 @@ open class ParentRepository @Inject constructor(
                 val token = authManager.getAccessToken()
                     ?: return@withContext Result.failure(DeviceListError.AuthMissing)
 
-                val responseText = jsonStringOrNull(reason)
-                val body = "{\"request_id\":\"$requestId\",\"minutes\":0,\"action\":\"DENY\"," +
-                    "\"response_text\":$responseText}"
+                val body = json.encodeToString(
+                    ApproveRequestBody(
+                        request_id = requestId,
+                        minutes = 0,
+                        action = "DENY",
+                        response_text = reason,
+                    )
+                )
 
                 val httpResponse = clientProvider.httpClient.post(
                     "${SupabaseClientProvider.SUPABASE_URL}/functions/v1/approve-request"
@@ -661,7 +712,13 @@ open class ParentRepository @Inject constructor(
                 header("apikey", SupabaseClientProvider.SUPABASE_ANON_KEY)
                 contentType(ContentType.Application.Json)
                 setBody(
-                    "{\"device_name\":\"$deviceName\",\"age_band\":\"$ageBand\",\"ttl_minutes\":$ttlMinutes}"
+                    json.encodeToString(
+                        CreatePairingCodeRequestBody(
+                            device_name = deviceName,
+                            age_band = ageBand,
+                            ttl_minutes = ttlMinutes,
+                        )
+                    )
                 )
             }
 
@@ -703,16 +760,6 @@ open class ParentRepository @Inject constructor(
         }
 
     /**
-     * Serializes a possibly-null string into a JSON string-or-null literal.
-     * Used by [approveRequest] and [denyRequest] to embed an optional
-     * `response_text` field without writing the JSON by hand. Pulled out to
-     * keep the call sites short enough to fit inside ktlint's 120-char
-     * max-line-length rule.
-     */
-    private fun jsonStringOrNull(value: String?): String =
-        if (value == null) "null" else "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
-
-    /**
      * Renames a child by PATCHing the `children` table at
      * `${SUPABASE_URL}/rest/v1/children?id=eq.{childId}` with body
      * `{"first_name":"<newName>"}`. RLS-guarded by `children_parent_update`
@@ -743,7 +790,7 @@ open class ParentRepository @Inject constructor(
                     header("Authorization", "Bearer $token")
                     header("apikey", SupabaseClientProvider.SUPABASE_ANON_KEY)
                     contentType(ContentType.Application.Json)
-                    setBody("""{"first_name":"${newName.replace("\\", "\\\\").replace("\"", "\\\"")}"}""")
+                    setBody(json.encodeToString(RenameChildRequestBody(first_name = newName)))
                 }
 
                 if (!httpResponse.status.isSuccess()) {
@@ -811,11 +858,17 @@ open class ParentRepository @Inject constructor(
         state: String
     ): Boolean = withContext(Dispatchers.IO) {
         try {
+            if (deviceId.isBlank()) return@withContext false
+
             val token = authManager.getAccessToken()
                 ?: return@withContext false
 
-            val body = """{"device_id":"${deviceId.replace("\\", "\\\\").replace("\"", "\\\"")}",""" +
-                """"state":"$state"}"""
+            val body = json.encodeToString(
+                SetDeviceStateRequestBody(
+                    device_id = deviceId,
+                    state = state,
+                )
+            )
 
             val response = clientProvider.httpClient.post(
                 "${SupabaseClientProvider.SUPABASE_URL}/functions/v1/set-device-state"

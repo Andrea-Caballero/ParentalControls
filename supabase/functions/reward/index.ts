@@ -1,8 +1,20 @@
 // T15: Reward Grant - Edge Function
-// Crea grant de recompensa respetando topes (T29)
+// Otorga minutos extra a un dispositivo como recompensa, con topes
+// diarios/semanales y verificación de propiedad.
+//
+// BLK-01 hardening: this handler used to derive `parentId` from a
+// manually base64-decoded JWT `sub` claim — that decode does NOT
+// verify the signature, expiration, or revocation. An attacker could
+// craft any `parentId` they wanted and grant rewards to themselves.
+// The handler now uses `supabase.auth.getUser(token)` (via
+// `_shared/jwt.ts`) to perform cryptographic verification and reads
+// `parentId` from the server-controlled `user.id`. The service-role
+// client is only constructed AFTER a verified identity has been
+// returned.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyAuth } from "../_shared/jwt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,31 +27,27 @@ const REWARD_LIMITS = {
   weekly_max_minutes: 180, // Máximo 3 horas por semana
 };
 
-serve(async (req) => {
+export async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const auth = await verifyAuth({
+    authHeader: req.headers.get("Authorization"),
+    corsHeaders,
+    env: {
+      url: Deno.env.get("SUPABASE_URL") ?? "",
+      anonKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    },
+    // Parent endpoint — no device_id required from the JWT; the
+    // caller supplies the device_id in the body and the handler
+    // checks ownership against the verified parent.
+    requireDevice: false,
+  });
+  if (!auth.ok) return auth.response;
+  const parentId = auth.parentId;
+
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Token requerido" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const jwtPayload = JSON.parse(atob(token.split(".")[1]));
-    const parentId = jwtPayload.sub;
-
-    if (!parentId) {
-      return new Response(
-        JSON.stringify({ error: "Usuario no autenticado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const { device_id, minutes, reason } = await req.json();
 
     if (!device_id || !minutes) {
@@ -49,6 +57,8 @@ serve(async (req) => {
       );
     }
 
+    // Constructed only after the JWT has been cryptographically
+    // verified — see BLK-01.
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -163,16 +173,22 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Reward error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Reward error:", message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+}
+
+if (import.meta.main) {
+  serve(handleRequest);
+}
 
 async function sendFcmToDevice(
-  supabase: ReturnType<typeof createClient>,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
   deviceId: string,
   payload: Record<string, unknown>
 ): Promise<void> {
@@ -184,7 +200,8 @@ async function sendFcmToDevice(
     .limit(1)
     .single();
 
-  if (!tokenRecord) {
+  const record = tokenRecord as { token?: string } | null;
+  if (!record?.token) {
     console.log("No FCM token for device:", deviceId);
     return;
   }
@@ -200,7 +217,7 @@ async function sendFcmToDevice(
         Authorization: `key=${serverKey}`,
       },
       body: JSON.stringify({
-        to: tokenRecord.token,
+        to: record.token,
         priority: "high",
         data: payload,
       }),

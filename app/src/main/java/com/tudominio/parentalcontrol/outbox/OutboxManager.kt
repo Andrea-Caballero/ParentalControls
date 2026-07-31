@@ -8,6 +8,10 @@ import com.tudominio.parentalcontrol.data.model.TimeRequestEntity
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.time.Instant
@@ -41,6 +45,17 @@ class OutboxManager @Inject constructor(
         private const val MAX_RETRIES = 3
 
         /**
+         * A claim is considered stale after this many seconds. The
+         * drainer runs `releaseStaleClaims(olderThan = now - TTL)`
+         * before each claim cycle so rows claimed by a drainer that
+         * crashed before it could finalize are re-eligible. Tuned
+         * generously because a slow network round-trip on a flaky
+         * connection is not the same as a crashed process; the legacy
+         * retry budget of 3 already catches truly stuck rows.
+         */
+        private const val STALE_CLAIM_TTL_SECONDS = 300L
+
+        /**
          * Convenience accessor for non-Hilt call sites (legacy Workers
          * constructed by WorkManager outside the `@HiltWorker` graph, or
          * unit tests that don't bootstrap Hilt). Resolves the singleton
@@ -67,15 +82,15 @@ class OutboxManager @Inject constructor(
      */
     suspend fun enqueueTimeRequest(request: TimeRequestEntity): Boolean {
         return try {
-            val payload = """
-                {
-                    "request_id": "${request.request_id}",
-                    "device_id": "${request.device_id}",
-                    "minutes_requested": ${request.minutes_requested},
-                    "reason": "${request.reason}",
-                    "created_at": ${request.created_at}
-                }
-            """.trimIndent()
+            val payload = buildOutboxPayloadJson(
+                mapOf(
+                    "request_id" to request.request_id,
+                    "device_id" to request.device_id,
+                    "minutes_requested" to request.minutes_requested,
+                    "reason" to request.reason,
+                    "created_at" to request.created_at,
+                )
+            )
 
             val dedupKey = "time_request_${request.request_id}"
 
@@ -100,17 +115,13 @@ class OutboxManager @Inject constructor(
     /**
      * Encola un evento genérico para envío posterior.
      */
-    suspend fun enqueueEvent(eventType: String, payload: Map<String, Any>): Boolean {
+    suspend fun enqueueEvent(eventType: String, payload: Map<String, Any?>): Boolean {
         return try {
-            val jsonPayload = payload.entries.joinToString(",") { (k, v) ->
-                "\"$k\": ${if (v is String) "\"$v\"" else v}"
-            }
-
             val dedupKey = "${eventType}_${System.currentTimeMillis()}"
 
             val outboxItem = OutboxEntity(
                 tipo = eventType,
-                payload_json = "{ $jsonPayload }",
+                payload_json = buildOutboxPayloadJson(payload),
                 dedup_key = dedupKey,
                 created_at = Instant.now().toString(),
                 server_date = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
@@ -127,9 +138,11 @@ class OutboxManager @Inject constructor(
     }
 
     /**
-     * Returns the list of pending outbox rows (processed = 0) that are still
-     * under the retry budget, ordered by `created_at` ASC. Used by
-     * [com.tudominio.parentalcontrol.workers.OutboxDrainer] to drive the drain.
+     * Returns the list of pending outbox rows (processed = 0, in_flight = 0)
+     * that are still under the retry budget, ordered by `created_at` ASC.
+     * Used by the legacy `SyncManager.drainOutbox` path; the canonical
+     * `OutboxDrainer` worker uses [claimPendingItems] which atomically
+     * SELECTs + claims in a single transaction.
      */
     suspend fun getPendingItems(
         maxAttempts: Int = MAX_RETRIES,
@@ -140,6 +153,90 @@ class OutboxManager @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error reading pending items: ${e.message}")
             emptyList()
+        }
+    }
+
+    /**
+     * Atomically SELECTs up to `limit` claimable rows and marks them
+     * `in_flight = 1`, returning the selected rows. A subsequent call
+     * will NOT see the same rows (the `in_flight = 0` filter excludes
+     * them) until the caller clears the flag via [markProcessedFromClaim],
+     * [incrementRetriesFromClaim], or [releaseClaim].
+     *
+     * Stale-claim recovery runs before the claim: any row whose
+     * `in_flight_at` is older than [STALE_CLAIM_TTL_SECONDS] is
+     * released, so a drainer that crashed mid-iteration does not
+     * permanently strand the row.
+     */
+    suspend fun claimPendingItems(
+        maxAttempts: Int = MAX_RETRIES,
+        limit: Int = 50,
+        now: String
+    ): List<OutboxEntity> {
+        return try {
+            releaseStaleClaims(now)
+            outboxDao.claimPendingItems(maxAttempts, limit, now)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error claiming pending items: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private suspend fun releaseStaleClaims(now: String) {
+        try {
+            // `now` is an ISO-8601 instant. Subtract the TTL via
+            // java.time to get the cutoff. We keep the operation in
+            // java.time so the SQL string compare stays a plain
+            // lexicographic compare on ISO-8601 (which is monotonic).
+            val cutoff = java.time.Instant.parse(now)
+                .minusSeconds(STALE_CLAIM_TTL_SECONDS)
+                .toString()
+            outboxDao.releaseStaleClaims(cutoff)
+        } catch (e: Exception) {
+            // A parse failure means the caller is using a non-ISO
+            // timestamp — log and skip the recovery pass; the
+            // legacy retry budget catches truly stuck rows anyway.
+            Log.w(TAG, "Skipping stale-claim recovery: ${e.message}")
+        }
+    }
+
+    /**
+     * Terminal: marks the row processed AND clears the in-flight
+     * flag in one statement so the sweeper can't reclaim a row that
+     * already reached the server.
+     */
+    suspend fun markProcessedFromClaim(id: UUID, processedAt: String) {
+        try {
+            outboxDao.markProcessedFromClaim(id, processedAt)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error marking item processed: ${e.message}")
+        }
+    }
+
+    /**
+     * Retryable failure path: clears the in-flight flag AND bumps the
+     * retry counter in one statement so the row becomes claimable again
+     * (with its new retry count) on the next drain cycle.
+     */
+    suspend fun incrementRetriesFromClaim(id: UUID) {
+        try {
+            outboxDao.incrementRetriesFromClaim(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error incrementing retries: ${e.message}")
+        }
+    }
+
+    /**
+     * Releases the in-flight flag without consuming a retry or
+     * marking the row terminal. Useful for callers that need to
+     * abort a claim mid-iteration (e.g., a worker cancelled before
+     * processing the item).
+     */
+    suspend fun releaseClaim(id: UUID) {
+        try {
+            outboxDao.releaseClaim(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing claim: ${e.message}")
         }
     }
 
@@ -188,6 +285,23 @@ class OutboxManager @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up: ${e.message}")
         }
+    }
+
+    private fun buildOutboxPayloadJson(payload: Map<String, Any?>): String {
+        return buildJsonObject {
+            payload.forEach { (key, value) ->
+                put(key, value.toJsonElement())
+            }
+        }.toString()
+    }
+
+    private fun Any?.toJsonElement(): JsonElement = when (this) {
+        null -> JsonNull
+        is JsonElement -> this
+        is String -> JsonPrimitive(this)
+        is Number -> JsonPrimitive(this)
+        is Boolean -> JsonPrimitive(this)
+        else -> JsonPrimitive(this.toString())
     }
 }
 

@@ -21,7 +21,8 @@ The parent app SHALL call the `create-pairing-code` Supabase edge function and S
 - **THEN** the parent UI SHALL show an "expired" state with a "Regenerate" action that re-invokes the edge function.
 
 ### Requirement: Child completes pairing via code or QR scan
-The child app SHALL accept the 8-character code either by manual entry or by scanning the QR (CameraX + ML Kit), and SHALL submit it to the `pairing` Supabase edge function.
+The child app SHALL accept the 8-character code either by manual entry or by scanning the QR (CameraX + ML Kit), and SHALL submit it to the `pairing` Supabase edge function. The redemption path MUST be service-mediated; the underlying RPC MUST validate the caller/session and MUST reject API-role access that bypasses the service boundary.
+(Previously: Pairing only required the child to submit the code and receive a linked `devices` row.)
 
 #### Scenario: Manual code entry posts to pairing edge function
 - **WHEN** the child types an 8-char code in `PairingManager.pairWithCode` and taps "Pair",
@@ -34,6 +35,12 @@ The child app SHALL accept the 8-character code either by manual entry or by sca
 #### Scenario: Success creates a devices row linked to the parent
 - **WHEN** the `pairing` edge function responds with a `device_id`,
 - **THEN** the child app SHALL persist it locally and the `devices` row in Supabase SHALL have `parent_id` set to the parent's `auth.uid()`.
+
+#### Scenario: Direct API-role redemption is rejected
+- **GIVEN** a direct API-role call to the redemption RPC
+- **WHEN** it bypasses the service boundary
+- **THEN** the call MUST be rejected
+- **AND** no second `devices` row MUST be created
 
 ### Requirement: Pairing code is single-use and time-bounded
 Each pairing code SHALL be consumable at most once and SHALL expire 15 minutes after creation (per the default in `pairing_codes.expires_at`).

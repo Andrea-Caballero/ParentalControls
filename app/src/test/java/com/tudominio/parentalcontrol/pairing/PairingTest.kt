@@ -25,56 +25,9 @@ class PairingCodeTest {
     }
 
     @Test
-    fun codeFormatValidation() {
-        val validCode = "ABCD1234"
-        val invalidCode = "AB"
-        
-        assertTrue(validCode.length >= PairingManager.CODE_LENGTH)
-        assertFalse(invalidCode.length >= PairingManager.CODE_LENGTH)
-    }
-
-    @Test
-    fun codeCanContainLettersAndNumbers() {
-        val code = "ABC12345"
-        assertTrue(code.all { it.isLetterOrDigit() })
-    }
-}
-
-class QrContentExtractionTest {
-
-    @Test
-    fun extractCodeFromUrl() {
-        val url = "https://parental.app/pair/ABCD1234"
-        val code = url.substringAfter("/pair/").substringBefore("?")
-        assertEquals("ABCD1234", code)
-    }
-
-    @Test
-    fun extractCodeFromUrlWithQueryParams() {
-        val url = "https://parental.app/pair/XYZ98765?ref=parent"
-        val code = url.substringAfter("/pair/").substringBefore("?")
-        assertEquals("XYZ98765", code)
-    }
-
-    @Test
-    fun extractCodeFromSimpleCodeWithPrefix() {
-        val content = "PC-ABCD1234"
-        val code = content.substringAfterLast("-")
-        assertEquals("ABCD1234", code)
-    }
-
-    @Test
-    fun extractCodeFromDirectCode() {
-        val content = "XYZ98765"
-        val code = if (content.length >= 8) content.takeLast(8) else content
-        assertEquals("XYZ98765", code)
-    }
-
-    @Test
-    fun invalidContentReturnsNullForShortCode() {
-        val content = "SHORT"
-        val code = if (content.length >= 8) content else null
-        assertNull(code)
+    fun manualCodeValidationUsesServerFormat() {
+        assertTrue(PairingManager.isValidManualCode("ABCDEFGH"))
+        assertFalse(PairingManager.isValidManualCode("ABCD1234"))
     }
 }
 

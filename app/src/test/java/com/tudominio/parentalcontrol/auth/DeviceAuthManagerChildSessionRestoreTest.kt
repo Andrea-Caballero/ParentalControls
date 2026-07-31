@@ -214,14 +214,13 @@ class DeviceAuthManagerChildSessionRestoreTest {
         org.junit.Assert.assertNull(message, value)
 
     /**
-     * R1.5 — `completePairing` does NOT swap the in-memory token
-     * from the response body. The pre-pairing anonymous JWT
-     * (already in memory from `createAnonymousSession`) remains the
-     * current bearer; `savePairedSession` persists it for cold
-     * start. The response carries only `{ device_id, parent_id }`.
+     * R1.5 — post-pairing JWT refresh. After pairing succeeds the
+     * anonymous bearer is rotated and the paired device id is
+     * preserved even when the refresh payload omits
+     * `app_metadata.device_id`.
      */
     @Test
-    fun completePairing_keepsAnonAccessTokenAfterPairing() = runBlocking {
+    fun completePairing_refreshesSessionAndPreservesDeviceId() = runBlocking {
         val first = managerWithTestCipher()
         val anonToken = "anon-CHILD-restored-after-pairing"
         val anonRefresh = "anon-refresh"
@@ -230,16 +229,32 @@ class DeviceAuthManagerChildSessionRestoreTest {
         DeviceAuthManager::class.java.getDeclaredField("currentRefreshToken")
             .apply { isAccessible = true }.set(first, anonRefresh)
 
-        // Production pairing response shape: only `{ device_id, parent_id }`.
-        val body = """{"device_id":"device-child-emulator-001",
+        val pairedDeviceId = "device-child-emulator-001"
+        val refreshedAccess = "paired-access-token"
+        val refreshedRefresh = "paired-refresh-token"
+        val pairingBody = """{"device_id":"$pairedDeviceId",
             "parent_id":"00000000-0000-0000-0000-000000000001"}"""
+        val refreshBody = """{
+            "access_token":"$refreshedAccess",
+            "refresh_token":"$refreshedRefresh",
+            "expires_in":3600,
+            "user":null
+        }"""
         val client = HttpClient(
             MockEngine {
-                respond(
-                    content = ByteReadChannel(body),
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
+                when (it.url.encodedPath) {
+                    "/functions/v1/pairing" -> respond(
+                        content = ByteReadChannel(pairingBody),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                    "/auth/v1/token" -> respond(
+                        content = ByteReadChannel(refreshBody),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                    else -> error("Unexpected request: ${it.url}")
+                }
             }
         ) { install(ContentNegotiation) { json() } }
         DeviceAuthManager::class.java.getDeclaredField("httpClient")
@@ -249,11 +264,16 @@ class DeviceAuthManagerChildSessionRestoreTest {
         val r = first.completePairing("ABCDEFGH")
         assertEquals(true, r is AuthResult.Success)
         assertEquals(
-            "completePairing MUST NOT swap the anon access token — " +
-                "the pre-pairing anon JWT remains the bearer so saved-" +
-                "PairedSession persists it for cold-start restore.",
-            anonToken,
+            "completePairing MUST rotate the bearer after pairing so the " +
+                "paired session can survive refresh flows.",
+            refreshedAccess,
             first.getAccessToken()
+        )
+        assertEquals(
+            "The paired device id must survive the JWT refresh even when " +
+                "the refresh response omits app_metadata.device_id.",
+            pairedDeviceId,
+            first.deviceId.value
         )
     }
 }

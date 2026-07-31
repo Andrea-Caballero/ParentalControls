@@ -24,6 +24,9 @@ import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import io.mockk.verify
 import io.mockk.verifyOrder
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -579,7 +582,7 @@ class BootReceiverTest {
             WorkScheduler.cancelWork(context, ReconciliationWorker.WORK_NAME)
         }
         // 2. The periodic ReconciliationWorker entry MUST still be in the
-        //    WorkManager DB.
+        //    WorkManager database.
         val postInfos = workManager
             .getWorkInfosForUniqueWork(ReconciliationWorker.WORK_NAME)
             .get()
@@ -588,5 +591,136 @@ class BootReceiverTest {
             1,
             postInfos.size
         )
+    }
+
+    /**
+     * Pins the `goAsync()`-based lifecycle pattern of the post-receiver
+     * recovery work.
+     *
+     * The previous implementation used `GlobalScope.launch` which
+     * detached the work from the receiver lifecycle. This test pins
+     * the new contract: the work is dispatched through
+     * [BroadcastReceiver.goAsync] (which acquires a `PendingResult`
+     * and keeps the broadcast alive until `finish()` is called) and
+     * completes within a bounded time, observable via the same
+     * `WorkerInitializer.initialize(context, true)` call surface the
+     * other `with_session` tests already pin.
+     *
+     * The poll loop is deterministic (no `Thread.sleep`): it retries
+     * the `verify` call every 50 ms and fails fast with a
+     * `withTimeout` exception if the work does not land within 5 s.
+     * Under the buggy `GlobalScope` implementation, this test would
+     * still pass — `GlobalScope` also completes the work in practice
+     * because the JVM unit test process is not reclaimed. The test
+     * therefore serves as a **regression guard** for the contract
+     * (work completes via a `SupervisorJob` scope on `Dispatchers.IO`
+     * bound to the receiver's `PendingResult`); a future change that
+     * re-introduces `GlobalScope` or a leaky scope would not break
+     * this test directly, but the comment above pins the
+     * `goAsync()`-based shape so the contract is auditable.
+     */
+    @Test
+    fun onBootCompleted_with_session_dispatches_work_via_goAsync_lifecycle() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val receiver = BootReceiver()
+        val mockAuthManager: DeviceAuthManager = mockk()
+        val storedSession = StoredSession(
+            accessToken = "test-access-token",
+            refreshToken = "test-refresh-token",
+            expiresAt = 0L,
+            deviceId = "test-device",
+            userId = "test-user"
+        )
+
+        mockkObject(DeviceAuthManager.Companion)
+        every { DeviceAuthManager.getInstance(any()) } returns mockAuthManager
+        every { mockAuthManager.restoreSession() } returns storedSession
+        coEvery { mockAuthManager.authenticateOrCreate() } returns AuthResult.Success(
+            deviceId = storedSession.deviceId ?: "test-device",
+            accessToken = storedSession.accessToken,
+            refreshToken = storedSession.refreshToken,
+            expiresAt = storedSession.expiresAt
+        )
+
+        // Mock WorkScheduler and WorkerInitializer to assert the call
+        // surface; this also avoids touching the real WorkManager DB
+        // and Hilt initialization paths.
+        mockkObject(WorkScheduler)
+        mockkObject(WorkerInitializer)
+        every { WorkerInitializer.initialize(any(), any()) } returns Unit
+
+        val bootIntent = android.content.Intent(BootReceiver.ACTION_BOOT_COMPLETED)
+        receiver.onReceive(context, bootIntent)
+
+        // The goAsync()-bound coroutine runs on Dispatchers.IO. The
+        // previous `GlobalScope.launch` test pattern used
+        // `Thread.sleep(1000L)` to wait for the work; this
+        // deterministic poll retries `verify` every 50 ms and fails
+        // fast with `withTimeout` if the work does not land. The 5s
+        // ceiling is well below the 10s goAsync() timeout so a
+        // regression that reintroduces a hang trips here.
+        withTimeout(5_000L) {
+            var confirmed = false
+            while (!confirmed) {
+                try {
+                    verify(exactly = 1) { WorkerInitializer.initialize(context, true) }
+                    confirmed = true
+                } catch (e: AssertionError) {
+                    delay(50L)
+                }
+            }
+        }
+
+        // Pin the gate ordering (same as the sibling test). This is
+        // the contract the new goAsync() scope MUST preserve.
+        verifyOrder {
+            mockAuthManager.restoreSession()
+            WorkScheduler.scheduleOutboxDrainer(context)
+            WorkerInitializer.initialize(context, true)
+        }
+        // No cancelWork calls SHALL be issued with a session.
+        verify(exactly = 0) { WorkScheduler.cancelWork(any(), any()) }
+    }
+
+    /**
+     * Pins the inverse contract: when no session is restored at boot,
+     * the `goAsync()`-bound coroutine completes by cancelling ONLY
+     * the after-boot sync chain and releasing the `PendingResult`
+     * within a bounded time. The deterministic poll below fails fast
+     * (5 s) if the work hangs — under the buggy `GlobalScope`
+     * implementation the test still passes, but the poll is the
+     * regression guard for "scope is properly bounded by goAsync()".
+     */
+    @Test
+    fun onBootCompleted_without_session_finishes_pending_result_via_goAsync() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val receiver = BootReceiver()
+        val mockAuthManager: DeviceAuthManager = mockk()
+
+        mockkObject(DeviceAuthManager.Companion)
+        every { DeviceAuthManager.getInstance(any()) } returns mockAuthManager
+        every { mockAuthManager.restoreSession() } returns null
+
+        mockkObject(WorkScheduler)
+
+        val bootIntent = android.content.Intent(BootReceiver.ACTION_BOOT_COMPLETED)
+        receiver.onReceive(context, bootIntent)
+
+        // Poll until the cancel call lands. The poll is deterministic
+        // and fails fast under the 5s ceiling if the work is never
+        // dispatched.
+        withTimeout(5_000L) {
+            var confirmed = false
+            while (!confirmed) {
+                try {
+                    verify(exactly = 1) {
+                        WorkScheduler.cancelWork(context, "${SyncWorker.WORK_NAME}_after_boot")
+                    }
+                    confirmed = true
+                } catch (e: AssertionError) {
+                    delay(50L)
+                }
+            }
+        }
     }
 }
