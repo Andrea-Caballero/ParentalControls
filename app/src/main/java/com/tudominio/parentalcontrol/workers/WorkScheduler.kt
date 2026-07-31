@@ -20,6 +20,7 @@ object WorkScheduler {
      * dev experience requires.
      */
     private const val FAST_POLL_INTERVAL_SECONDS = 10L
+    private const val POST_PAIRING_UNIQUE_WORK_NAME = "sync_work_after_pairing"
 
     fun scheduleAllPeriodicWork(context: Context) {
         Log.d(TAG, "Programando todos los workers periódicos")
@@ -313,13 +314,9 @@ object WorkScheduler {
         Log.d(TAG, "Sync único programado")
     }
 
-    fun scheduleSyncAfterPairing(context: Context) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-
-        val workRequest = OneTimeWorkRequestBuilder<SyncWorker>()
-            .setConstraints(constraints)
+    private fun buildPostPairingSyncRequest() =
+        OneTimeWorkRequestBuilder<SyncWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(
                 BackoffPolicy.EXPONENTIAL,
                 WorkRequest.MIN_BACKOFF_MILLIS,
@@ -329,14 +326,21 @@ object WorkScheduler {
             .addTag(SyncWorker.TAG_AFTER_PAIRING)
             .build()
 
-        WorkManager.getInstance(context)
-            .enqueueUniqueWork(
-                "${SyncWorker.WORK_NAME}_after_pairing",
-                ExistingWorkPolicy.REPLACE,
-                workRequest
-            )
+    private fun enqueuePostPairingSync(context: Context, policy: ExistingWorkPolicy) =
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            POST_PAIRING_UNIQUE_WORK_NAME,
+            policy,
+            buildPostPairingSyncRequest()
+        )
 
+    fun scheduleSyncAfterPairing(context: Context) {
+        enqueuePostPairingSync(context, ExistingWorkPolicy.REPLACE)
         Log.d(TAG, "Sync post-emparejamiento programado")
+    }
+
+    fun scheduleSyncAfterPairingRecovery(context: Context) {
+        enqueuePostPairingSync(context, ExistingWorkPolicy.KEEP)
+        Log.d(TAG, "Recuperación sync post-emparejamiento programada")
     }
 
     fun cancelAll(context: Context) {
@@ -373,6 +377,17 @@ object WorkScheduler {
     }
 }
 
+/**
+ * Outcome of [WorkerInitializer.reinitializeAfterPairing]. Pairing is
+ * irreversible (server consumed the code, session persisted) so the
+ * UI MUST reach Success regardless of scheduling outcome; callers use
+ * this enum to decide whether to log a contextual warning.
+ */
+enum class PostPairingSchedulingOutcome {
+    SCHEDULED,
+    FAILED,
+}
+
 object WorkerInitializer {
 
     private const val TAG = "WorkerInitializer"
@@ -389,8 +404,40 @@ object WorkerInitializer {
         Log.d(TAG, "Workers inicializados")
     }
 
-    fun reinitializeAfterPairing(context: Context) {
+    /**
+     * Re-arms the post-pairing sync. NEVER rethrows — a WorkManager
+     * scheduling exception is logged and surfaced via
+     * [PostPairingSchedulingOutcome.FAILED] so the pairing flow can
+     * still transition to the admin gate.
+     */
+    fun reinitializeAfterPairing(context: Context): PostPairingSchedulingOutcome {
         Log.d(TAG, "Reinicializando tras emparejamiento")
-        WorkScheduler.scheduleSyncAfterPairing(context)
+        return try {
+            WorkScheduler.scheduleSyncAfterPairing(context)
+            PostPairingSchedulingOutcome.SCHEDULED
+        } catch (e: Exception) {
+            Log.w(
+                TAG,
+                "Fallo al programar sync post-emparejamiento; el emparejamiento ya es irreversible",
+                e
+            )
+            PostPairingSchedulingOutcome.FAILED
+        }
+    }
+
+    /**
+     * Attempts the bounded ChildStatus recovery schedule exactly once.
+     * NEVER rethrows so a persistent WorkManager failure cannot crash
+     * the already-paired child screen.
+     */
+    fun recoverAfterPairing(context: Context): PostPairingSchedulingOutcome {
+        Log.d(TAG, "Recuperando sync post-emparejamiento")
+        return try {
+            WorkScheduler.scheduleSyncAfterPairingRecovery(context)
+            PostPairingSchedulingOutcome.SCHEDULED
+        } catch (e: Exception) {
+            Log.w(TAG, "Fallo al programar recuperación sync post-emparejamiento", e)
+            PostPairingSchedulingOutcome.FAILED
+        }
     }
 }

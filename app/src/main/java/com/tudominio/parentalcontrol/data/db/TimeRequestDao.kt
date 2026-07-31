@@ -57,6 +57,18 @@ interface TimeRequestDao {
     @Query("SELECT * FROM time_requests WHERE status = 'PENDING' ORDER BY created_at DESC")
     fun getPendingRequestsFlow(): Flow<List<TimeRequestEntity>>
 
+    /**
+     * Device-scoped pending flow. The child status screen must use this
+     * instead of [getPendingRequestsFlow] so one child's pending request
+     * does not leak into another child's UI on the same database.
+     */
+    @Query(
+        "SELECT * FROM time_requests " +
+            "WHERE device_id = :deviceId AND status = 'PENDING' " +
+            "ORDER BY created_at DESC"
+    )
+    fun getPendingRequestsForDeviceFlow(deviceId: String): Flow<List<TimeRequestEntity>>
+
     @Query("UPDATE time_requests SET status = :status, responded_at = :respondedAt WHERE request_id = :requestId")
     suspend fun updateRequestStatus(requestId: String, status: String, respondedAt: String)
 

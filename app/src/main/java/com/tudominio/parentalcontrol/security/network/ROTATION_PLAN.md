@@ -6,14 +6,24 @@ Este documento describe el plan de rotación de certificados para el certificate
 
 ## Configuración Actual
 
-```kotlin
-// Dominio de Supabase
-val supabaseHost = "your-project.supabase.co"
+Los pines no se almacenan en `TlsConfig.kt`. La fuente de valores es Gradle:
+`app/build.gradle.kts` lee estas propiedades y las publica en `BuildConfig`:
 
-// Pines actuales (reemplazar con valores reales)
-val PIN_PRIMARY = "sha256/..."
-val PIN_SECONDARY = "sha256/..."
-val PIN_BACKUP_CA = "sha256/..."
+- `-PsupabasePinPrimary=...` → `BuildConfig.SUPABASE_PIN_PRIMARY`
+- `-PsupabasePinSecondary=...` → `BuildConfig.SUPABASE_PIN_SECONDARY`
+- `-PsupabasePinBackupCa=...` → `BuildConfig.SUPABASE_PIN_BACKUP_CA`
+
+Si no se proporcionan las propiedades, Gradle usa placeholders reconocibles. El
+cliente real falla cerrado antes de construirse si algún pin está vacío, mal
+formado o sigue siendo un placeholder.
+
+Ejemplo de build con pines reales:
+
+```bash
+./gradlew assembleRelease \
+  -PsupabasePinPrimary="sha256/<PIN_PRIMARIO_REAL>" \
+  -PsupabasePinSecondary="sha256/<PIN_SECUNDARIO_REAL>" \
+  -PsupabasePinBackupCa="sha256/<PIN_CA_REAL>"
 ```
 
 ## Obtención de Pines
@@ -48,35 +58,39 @@ openssl s_client -servername TU_PROYECTO.supabase.co \
 3. **NO hacer cambios aún**
 
 ### Día 1-30: Fase de Backup
-1. Actualizar `PIN_SECONDARY` con el nuevo pin
+1. Actualizar `supabasePinSecondary` con el nuevo pin
 2. Desplegar actualización de la app
 3. Monitorizar: todos los dispositivos deben actualizar
 
-```kotlin
-// Después de actualizar pines
-const val PIN_PRIMARY = "sha256/CERTIFICADO_ACTUAL..."    // Sin cambios
-const val PIN_SECONDARY = "sha256/NUEVO_CERTIFICADO..."  // ← Nuevo valor
+```bash
+# Después de actualizar pines: mantener el primario y publicar el nuevo backup
+./gradlew assembleRelease \
+  -PsupabasePinPrimary="sha256/<CERTIFICADO_ACTUAL>" \
+  -PsupabasePinSecondary="sha256/<NUEVO_CERTIFICADO>" \
+  -PsupabasePinBackupCa="sha256/<CA_REAL>"
 ```
 
 ### Día 30-60: Transición
 1. Verificar que no hay errores de pinning en producción
-2. Actualizar `PIN_PRIMARY` con el nuevo pin
+2. Actualizar `supabasePinPrimary` con el nuevo pin
 3. Desplejar actualización de la app
 
-```kotlin
-// Después de transición
-const val PIN_PRIMARY = "sha256/NUEVO_CERTIFICADO..."    // ← Nuevo valor
-const val PIN_SECONDARY = "sha256/NUEVO_CERTIFICADO..."  // Mismo valor
+```bash
+# Después de la transición: promover el nuevo certificado a primario
+./gradlew assembleRelease \
+  -PsupabasePinPrimary="sha256/<NUEVO_CERTIFICADO>" \
+  -PsupabasePinSecondary="sha256/<NUEVO_CERTIFICADO>" \
+  -PsupabasePinBackupCa="sha256/<CA_REAL>"
 ```
 
 ### Día 60-90: Limpieza
 1. Esperar a que todos los dispositivos tengan la nueva versión
-2. Mantener `PIN_SECONDARY` como backup
+2. Mantener `supabasePinSecondary` como backup
 3. El siguiente ciclo comienza en el día 90
 
 ### Día 90+: Ciclo completo
 1. Si hay nuevo certificado, repetir el proceso
-2. Remover `PIN_SECONDARY` antiguo si ya no es necesario
+2. Remover `supabasePinSecondary` antiguo si ya no es necesario
 
 ## Comando para verificar pines en producción
 
@@ -90,7 +104,7 @@ openssl s_client -servername TU_PROYECTO.supabase.co \
 ## Manejo de Emergencia
 
 ### Si el certificado expira inesperadamente:
-1. Usar `PIN_SECONDARY` si estaba configurado
+1. Usar `supabasePinSecondary` si estaba configurado
 2. Desplegar actualización con pines actualizados
 3. Notificar a usuarios de actualización obligatoria
 

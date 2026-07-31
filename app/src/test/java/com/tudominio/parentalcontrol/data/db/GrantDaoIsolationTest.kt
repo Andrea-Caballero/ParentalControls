@@ -260,6 +260,17 @@ class GrantDaoIsolationTest {
         assertTrue("dev-B active set must not contain dev-A rows", bActive.all { it.device_id == "dev-B" })
     }
 
+    @Test
+    fun getActiveGrantsFlow_excludes_expiry_equality() = runBlocking {
+        val now = "2026-07-27T10:00:00Z"
+        grantDao.insertGrant(grant("equal", "dev-A", "extra_time", 15, expiresAt = now))
+        grantDao.insertGrant(grant("future", "dev-A", "extra_time", 20, expiresAt = midFuture))
+
+        val active = grantDao.getActiveGrantsFlow("dev-A", now).first()
+
+        assertEquals(listOf("future"), active.map { it.id })
+    }
+
     // ===== Goal 1: device-isolated deletion =====
 
     /**

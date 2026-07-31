@@ -8,28 +8,34 @@
 //   - PATCH /rest/v1/time_requests → auto-DENY sweep on stale PENDING rows
 //   - POST /rest/v1/rpc/approve_request_atomic → atomic verdict + grant
 //   - GET  /rest/v1/device_push_tokens → optional FCM lookup
+//   - GET  /auth/v1/user              → BLK-01 JWT verification
 //
 // The auto-DENY 1h sweep and the auth-hardening 401 contract are
 // pinned by the existing tests below. The RPC mock was added so the
 // handler's `supabaseAdmin.rpc("approve_request_atomic", ...)` call
 // resolves to the migration's success/error shape.
 
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import { handleRequest } from "./index.ts";
-
-const MALFORMED_AUTH_HEADERS = [
-  "Basic credentials",
-  "Bearer only-two-segments.parts",
-  "Bearer header.%%%invalid%%%.signature",
-  "Bearer header.eyJzdWIi.signature",
-];
 
 const PARENT_UUID = "11111111-1111-1111-1111-111111111111";
 const DEVICE_ID = "device-aaaa";
 const STALE_REQUEST_ID = "req-stale-old";
 const FRESH_REQUEST_ID = "req-fresh-new";
 
-const PARENT_JWT = `header.${btoa(JSON.stringify({ sub: PARENT_UUID }))}.signature`;
+// Headers that the OLD handler treated as "auth failure" (401). Under
+// the BLK-01 helper, the error message is more granular:
+//   - headers without a Bearer prefix → 401 "Token requerido"
+//   - headers with a Bearer prefix but a rejected JWT → 401
+//     "Token inválido o expirado"
+// Either way the HTTP status is 401 and no privileged work happens,
+// which is the contract the test still pins.
+const MALFORMED_AUTH_HEADERS = [
+  "Basic credentials",
+  "Bearer only-two-segments.parts",
+  "Bearer header.%%%invalid%%%.signature",
+  "Bearer header.eyJzdWIi.signature",
+];
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -44,6 +50,8 @@ function authHeader(jwt: string): Record<string, string> {
 
 /**
  * Build a fetch mock that mirrors the post-migration handler call shape:
+ *  - GET  /auth/v1/user → BLK-01 JWT verification (returns the
+ *    server-side parent identity)
  *  - time_requests SELECT (ownership precheck)
  *  - time_requests PATCH (auto-DENY sweep only — the RPC owns the verdict)
  *  - POST /rest/v1/rpc/approve_request_atomic (atomic verdict + grant)
@@ -52,6 +60,8 @@ function authHeader(jwt: string): Record<string, string> {
 function buildFetchMock(opts: {
   staleRequest: Record<string, unknown>;
   freshRequest: Record<string, unknown>;
+  /** When set, /auth/v1/user returns an error envelope (forged/expired JWT). */
+  rejectAuth?: boolean;
 }) {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const timeRequests = new Map<string, Record<string, unknown>>();
@@ -79,6 +89,20 @@ function buildFetchMock(opts: {
     const body = await parseBody(init);
     calls.push({ url, method, body });
 
+    // BLK-01: auth.getUser(token) hits /auth/v1/user. The mock returns
+    // the server-side parent identity (NOT a decoded sub claim). When
+    // opts.rejectAuth is set we return the standard "invalid_grant"
+    // envelope so the helper returns 401.
+    if (url.includes("/auth/v1/user")) {
+      if (opts.rejectAuth) {
+        return jsonResponse(
+          { error: "invalid_grant", message: "Bad JWT" },
+          401,
+        );
+      }
+      return jsonResponse({ id: PARENT_UUID, email: "parent@local.test" });
+    }
+
     // time_requests SELECT — ownership precheck
     if (url.includes("/rest/v1/time_requests") && method === "GET") {
       const id = url.match(/id=eq\.([^&]+)/)?.[1];
@@ -89,8 +113,6 @@ function buildFetchMock(opts: {
 
     // time_requests PATCH — auto-DENY sweep only.
     if (url.includes("/rest/v1/time_requests") && method === "PATCH") {
-      // The auto-DENY patch body has `status: "DENIED"` +
-      // `response_text: "Auto-denied: no parent response within 1h"`.
       if (
         body &&
         typeof body === "object" &&
@@ -98,8 +120,6 @@ function buildFetchMock(opts: {
         (body as Record<string, unknown>).response_text ===
           "Auto-denied: no parent response within 1h"
       ) {
-        // Mirror the production WHERE clause so fresh rows are not
-        // mutated by the sweep.
         const urlLtMatch = url.match(/created_at=lt\.([^&]+)/);
         const ltIso = urlLtMatch ? decodeURIComponent(urlLtMatch[1]) : null;
         for (const [_id, row] of timeRequests.entries()) {
@@ -119,18 +139,14 @@ function buildFetchMock(opts: {
     }
 
     // approve_request_atomic RPC — migration 012.
-    // Returns the jsonb success envelope (or error shape) the Edge
-    // Function expects from the SECURITY DEFINER function.
     if (
       url.includes("/rest/v1/rpc/approve_request_atomic") &&
       method === "POST"
     ) {
       const params = (body ?? {}) as Record<string, unknown>;
-      // p_minutes IS NULL → DENY branch.
       if (params.p_minutes == null) {
         return jsonResponse({ success: true, decision: "DENIED" });
       }
-      // p_minutes IS NOT NULL → APPROVE branch.
       return jsonResponse({
         success: true,
         decision: "APPROVED",
@@ -141,7 +157,6 @@ function buildFetchMock(opts: {
       });
     }
 
-    // device_push_tokens SELECT — no FCM in this test
     if (url.includes("/rest/v1/device_push_tokens")) {
       return jsonResponse(null);
     }
@@ -172,7 +187,7 @@ function makeApproveRequest(body: object): Request {
   return new Request("https://example.test/functions/v1/approve-request", {
     method: "POST",
     headers: {
-      ...authHeader(PARENT_JWT),
+      Authorization: "Bearer header.payload.signature",
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -188,7 +203,6 @@ Deno.test({
   fn: async () => {
     setEnv();
 
-    // 2-hour-old PENDING request on the same device as the fresh one.
     const now = Date.now();
     const twoHoursAgo = new Date(now - 2 * 60 * 60 * 1000).toISOString();
     const staleRequest = {
@@ -205,7 +219,7 @@ Deno.test({
       package_name: "com.example.app",
       requested_minutes: 30,
       status: "PENDING",
-      created_at: new Date(now - 5 * 60 * 1000).toISOString(), // 5 min ago
+      created_at: new Date(now - 5 * 60 * 1000).toISOString(),
     };
 
     const { fetchMock, calls, timeRequests } = buildFetchMock({
@@ -215,10 +229,6 @@ Deno.test({
     installFetchMock(fetchMock);
 
     try {
-      // Trigger an APPROVE on the FRESH request. The handler must:
-      //  1. Run the auto-DENY sweep BEFORE the RPC,
-      //  2. Then POST the atomic RPC (`approve_request_atomic`)
-      //     which returns the APPROVED envelope.
       const response = await handleRequest(
         makeApproveRequest({
           request_id: FRESH_REQUEST_ID,
@@ -229,9 +239,6 @@ Deno.test({
 
       assertEquals(response.status, 200);
 
-      // The RPC was called with the expected params and returned the
-      // migration-contract shape, which the Edge Function translates
-      // into the response envelope.
       const rpcCall = calls.find((c) =>
         c.method === "POST" &&
         c.url.includes("/rest/v1/rpc/approve_request_atomic")
@@ -253,8 +260,6 @@ Deno.test({
       assertEquals(body.grant_id, "grant-mock");
       assertEquals(body.minutes, 30);
 
-      // The auto-DENY PATCH fires before the RPC and updates the
-      // stale row only (the WHERE clause gates it).
       const autoDenyPatch = calls.find((c) =>
         c.method === "PATCH" &&
         c.url.includes("/rest/v1/time_requests") &&
@@ -271,23 +276,13 @@ Deno.test({
           `Calls: ${calls.map((c) => `${c.method} ${c.url}`).join(", ")}`,
       );
 
-      // The stale row's status is now DENIED in the in-memory table.
       const stale = timeRequests.get(STALE_REQUEST_ID);
-      assertEquals(
-        stale?.status,
-        "DENIED",
-        "Stale PENDING row must be auto-updated to DENIED",
-      );
+      assertEquals(stale?.status, "DENIED");
       assertEquals(
         stale?.response_text,
         "Auto-denied: no parent response within 1h",
-        "Auto-DENY must set response_text to the spec-pinned message",
       );
-      assertEquals(
-        typeof stale?.denied_at,
-        "string",
-        "Auto-DENY must set denied_at to a timestamp",
-      );
+      assertEquals(typeof stale?.denied_at, "string");
     } finally {
       restoreFetch();
     }
@@ -302,7 +297,6 @@ Deno.test({
   fn: async () => {
     setEnv();
 
-    // Only a fresh 30-minute-old PENDING request — no stale row.
     const now = Date.now();
     const freshRequest = {
       id: FRESH_REQUEST_ID,
@@ -314,7 +308,7 @@ Deno.test({
     };
 
     const { fetchMock, calls, timeRequests } = buildFetchMock({
-      staleRequest: { ...freshRequest, id: "stale-id" }, // not present in table
+      staleRequest: { ...freshRequest, id: "stale-id" },
       freshRequest,
     });
     installFetchMock(fetchMock);
@@ -330,10 +324,6 @@ Deno.test({
 
       assertEquals(response.status, 200);
 
-      // Assert the FRESH row's response_text is NOT the auto-deny
-      // message (which would indicate the auto-deny sweep wrongly
-      // touched it). The status can legitimately be "APPROVED"
-      // because the atomic RPC ran and flipped it.
       const fresh = timeRequests.get(FRESH_REQUEST_ID);
       assertEquals(
         fresh?.response_text,
@@ -359,7 +349,160 @@ Deno.test({
         body: JSON.stringify({ request_id: FRESH_REQUEST_ID, minutes: 30 }),
       }));
       assertEquals(response.status, 401, authHeader);
-      assertEquals(await response.json(), { error: "Usuario no autenticado" });
+      const body = await response.json();
+      // Under the BLK-01 helper:
+      //   - "Basic credentials"        → 401 "Token requerido"
+      //   - "Bearer <anything>"         → 401 "Token inválido o expirado"
+      // Both short-circuit before any privileged DB/RPC call.
+      const allowedErrors = ["Token requerido", "Token inválido o expirado"];
+      assertEquals(
+        allowedErrors.includes(body.error),
+        true,
+        `unexpected error for ${authHeader}: ${body.error}`,
+      );
+    }
+  },
+});
+
+/**
+ * BLK-01 negative path — verify that the handler short-circuits to
+ * 401 when Supabase Auth reports a forged/expired token, AND that
+ * the privileged approve_request_atomic RPC is never reached. The
+ * fetch mock rejects /auth/v1/user (no successful auth response) and
+ * the test asserts the RPC was never called.
+ */
+Deno.test({
+  name:
+    "BLK-01 — forged/expired JWT is rejected; approve_request_atomic RPC is NEVER reached",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    setEnv();
+
+    // Forged payload: {sub: PARENT_UUID} — would have been accepted by
+    // the OLD handler that just decoded the JWT.
+    const forgedJwt = `header.${btoa(JSON.stringify({ sub: PARENT_UUID }))}.signature`;
+
+    const now = Date.now();
+    const freshRequest = {
+      id: FRESH_REQUEST_ID,
+      device_id: DEVICE_ID,
+      package_name: "com.example.app",
+      requested_minutes: 15,
+      status: "PENDING",
+      created_at: new Date(now - 5 * 60 * 1000).toISOString(),
+    };
+
+    const { fetchMock, calls } = buildFetchMock({
+      staleRequest: { ...freshRequest, id: "stale-id" },
+      freshRequest,
+      rejectAuth: true,
+    });
+    installFetchMock(fetchMock);
+
+    try {
+      const response = await handleRequest(new Request(
+        "https://example.test/functions/v1/approve-request",
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${forgedJwt}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ request_id: FRESH_REQUEST_ID, minutes: 30, action: "APPROVE" }),
+        },
+      ));
+
+      assertEquals(response.status, 401);
+      const body = await response.json();
+      assertEquals(body.error, "Token inválido o expirado");
+
+      // The service-role / privileged RPC must NOT have been called.
+      const rpcCalls = calls.filter((c) =>
+        c.url.includes("/rest/v1/rpc/approve_request_atomic")
+      );
+      assertEquals(
+        rpcCalls.length,
+        0,
+        "forged/expired JWT must not reach approve_request_atomic. " +
+          `Calls: ${calls.map((c) => `${c.method} ${c.url}`).join(", ")}`,
+      );
+      // The time_requests ownership precheck (a service-role read)
+      // must also NOT have been reached.
+      const timeRequestReads = calls.filter((c) =>
+        c.url.includes("/rest/v1/time_requests") && c.method === "GET"
+      );
+      assertEquals(
+        timeRequestReads.length,
+        0,
+        "forged/expired JWT must not reach the time_requests read. " +
+          `Calls: ${calls.map((c) => `${c.method} ${c.url}`).join(", ")}`,
+      );
+    } finally {
+      restoreFetch();
+    }
+  },
+});
+
+/**
+ * BLK-01 positive path — a verified parent reaches the RPC and the
+ * `p_parent_id` is the verified `user.id`, NOT the decoded `sub`
+ * claim. The forged-token test above proves the old code accepted
+ * any `sub`; this one pins the new contract.
+ */
+Deno.test({
+  name:
+    "BLK-01 — verified parent: RPC p_parent_id comes from verified user.id (not JWT sub)",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    setEnv();
+
+    // The JWT carries a `sub` claim for a DIFFERENT user. The mock
+    // returns the real parent (PARENT_UUID) from /auth/v1/user, so
+    // the RPC must use the verified identity, not the JWT claim.
+    const forgedSubJwt =
+      `header.${btoa(JSON.stringify({ sub: "00000000-0000-0000-0000-000000000000" }))}.signature`;
+
+    const now = Date.now();
+    const freshRequest = {
+      id: FRESH_REQUEST_ID,
+      device_id: DEVICE_ID,
+      package_name: "com.example.app",
+      requested_minutes: 15,
+      status: "PENDING",
+      created_at: new Date(now - 5 * 60 * 1000).toISOString(),
+    };
+
+    const { fetchMock, calls } = buildFetchMock({
+      staleRequest: { ...freshRequest, id: "stale-id" },
+      freshRequest,
+    });
+    installFetchMock(fetchMock);
+
+    try {
+      const response = await handleRequest(new Request(
+        "https://example.test/functions/v1/approve-request",
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${forgedSubJwt}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ request_id: FRESH_REQUEST_ID, minutes: 30, action: "APPROVE" }),
+        },
+      ));
+
+      assertEquals(response.status, 200);
+      const rpcCall = calls.find((c) =>
+        c.url.includes("/rest/v1/rpc/approve_request_atomic") &&
+        c.method === "POST"
+      );
+      assertEquals(typeof rpcCall, "object");
+      const params = rpcCall!.body as Record<string, unknown>;
+      // The verified user.id (PARENT_UUID) is the one that reaches
+      // the RPC, NOT the JWT `sub` ("00000000-...").
+      assertEquals(
+        params.p_parent_id,
+        PARENT_UUID,
+        "p_parent_id must come from the verified user, not the JWT sub",
+      );
+    } finally {
+      restoreFetch();
     }
   },
 });

@@ -9,6 +9,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.tudominio.parentalcontrol.admin.DeviceAdminPromptCoordinator
+import com.tudominio.parentalcontrol.workers.PostPairingSchedulingOutcome
 import com.tudominio.parentalcontrol.workers.WorkerInitializer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -26,7 +28,30 @@ import kotlinx.coroutines.withContext
 @HiltViewModel
 class PairingViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val savedStateHandle: SavedStateHandle
+    private val savedStateHandle: SavedStateHandle,
+    // WU-D follow-up — Device Admin prompt coordinator. Hilt supplies
+    // the @Singleton from RepositoryModule in production so the same
+    // state machine drives the pairing screen gating AND the child
+    // status banner. Pre-fix, `PairingScreen.SuccessContent` built a
+    // throwaway `DeviceAdminPromptCoordinator()` via `remember { ... }`
+    // and the state changes from "Más tarde" never reached the
+    // Hilt-singleton observed by `ChildStatusViewModel`.
+    //
+    // The default value preserves the manual `PairingViewModelFactory`
+    // and the existing unit tests (`PairingViewModelAdminGateTest`,
+    // `PairingScreenRecoveryTest`, `PairingViewModelChildNameLengthTest`,
+    // `PairingViewModelManualCodeFormatTest`) that construct
+    // `PairingViewModel(context, savedStateHandle)` directly. Hilt
+    // calls the same constructor with all three parameters supplied
+    // from the graph, so production gets the singleton and tests
+    // get a fresh per-instance coordinator without changing the
+    // call sites.
+    //
+    // `internal val` (read-only) so `PairingScreen.SuccessContent`
+    // can use the exact injected instance — no defensive copy, no
+    // mutable replacement, no leak of the coordinator outside the
+    // app module.
+    internal val adminCoordinator: DeviceAdminPromptCoordinator = DeviceAdminPromptCoordinator()
 ) : ViewModel() {
 
     private val pairingManager = PairingManager.getInstance(context)
@@ -67,6 +92,28 @@ class PairingViewModel @Inject constructor(
     private var lastScanTime: Long = 0
 
     init {
+        // Restored-state bypass guard: a pre-fix value persisted when
+        // MAX_CHILD_FIRST_NAME_LENGTH was still 80 can be rehydrated
+        // from SavedStateHandle on cold start. PairingManager
+        // .childFirstNameProvider only trims the value it sees, so a
+        // raw 33..80-char restored name would bypass the new 32-char
+        // cap and reach the wire as a server HTTP 400
+        // ("child_first_name es requerido (1..32 caracteres)").
+        //
+        // Normalize the restored value through the SAME
+        // sanitizeChildFirstName pipeline used by updateChildFirstName
+        // and persist the normalized value back into SavedStateHandle.
+        // The exposed childFirstName StateFlow is backed by the same
+        // handle entry, so UI state, provider state, and persisted
+        // state all observe the same normalized value after init.
+        val restored = savedStateHandle.get<String>(KEY_CHILD_FIRST_NAME)
+        if (restored != null) {
+            val sanitized = sanitizeChildFirstName(restored)
+            if (sanitized != restored) {
+                savedStateHandle[KEY_CHILD_FIRST_NAME] = sanitized
+            }
+        }
+
         pairingManager.childFirstNameProvider = {
             childFirstName.value.trim().takeIf { it.isNotEmpty() }
         }
@@ -74,14 +121,26 @@ class PairingViewModel @Inject constructor(
     }
 
     /**
-     * Actualiza el nombre del niño con caracteres seguros para el backend.
+     * Pure helper: trim → safe-char filter → whitespace collapse →
+     * cap at [MAX_CHILD_FIRST_NAME_LENGTH]. Shared by
+     * [updateChildFirstName] (live UI input) and the init-block
+     * restored-state normalization so both paths apply the exact same
+     * sanitization rules. Keeping it as a single source of truth
+     * prevents the pre-fix 33..80-char restored-state bypass from
+     * re-introducing the wire-side HTTP 400.
      */
-    fun updateChildFirstName(name: String) {
-        savedStateHandle[KEY_CHILD_FIRST_NAME] = name
+    private fun sanitizeChildFirstName(input: String): String =
+        input
             .trim()
             .filter { it.isLetter() || it == ' ' || it == '-' || it == '\'' }
             .replace(Regex("\\s+"), " ")
             .take(MAX_CHILD_FIRST_NAME_LENGTH)
+
+    /**
+     * Actualiza el nombre del niño con caracteres seguros para el backend.
+     */
+    fun updateChildFirstName(name: String) {
+        savedStateHandle[KEY_CHILD_FIRST_NAME] = sanitizeChildFirstName(name)
     }
 
     /**
@@ -171,6 +230,30 @@ class PairingViewModel @Inject constructor(
     }
 
     /**
+     * Pre-fix bug: `pairWithManualCode` only checked length before
+     * invoking the network. A typed `ABCD1234` (contains `1`) reached
+     * the wire and failed server-side with HTTP 400 `INVALID_CODE_FORMAT`,
+     * leaking the raw server token to the user.
+     *
+     * Post-fix: validate the format against the same regex the server
+     * uses (`^[A-HJ-NP-Z2-9]{8}$`) via [PairingManager.isValidManualCode]
+     * and reject with a truthful Spanish copy that names I/O/0/1 BEFORE
+     * any network call. The same helper also gates the UI "Pair" button
+     * so the contract is enforced at both entry points.
+     *
+     * @return null when the code is valid; a `PairingUiState.Error` with
+     *         a format-specific message otherwise.
+     */
+    private fun rejectInvalidFormat(code: String): PairingUiState.Error? {
+        if (PairingManager.isValidManualCode(code)) return null
+        return PairingUiState.Error(
+            message = "Código no válido. Solo letras A-H, J-N, P-Z y números 2-9 (sin I, O, 0, 1).",
+            canRetry = true,
+            canRequestNew = false,
+        )
+    }
+
+    /**
      * Empareja con el código manual.
      */
     fun pairWithManualCode() {
@@ -182,10 +265,22 @@ class PairingViewModel @Inject constructor(
             )
             return
         }
-        
+        // Format validation: a full-length code that does not match the
+        // server regex (excludes I/O/0/1) would fail server-side with
+        // HTTP 400 INVALID_CODE_FORMAT. Reject here with a truthful
+        // Spanish copy so the user sees the actual constraint and no
+        // network call is made. Also fires when IME/programmatic input
+        // bypasses the UI button gate (e.g. deeplink with an invalid
+        // code, restored state, or a test invoking pairWithManualCode
+        // directly).
+        rejectInvalidFormat(code)?.let {
+            _uiState.value = it
+            return
+        }
+
         Log.d(TAG, "Emparejando con código manual: ${code.take(4)}...")
         _uiState.value = PairingUiState.Pairing
-        
+
         viewModelScope.launch {
             val result = pairingManager.pairWithCode(code)
             handlePairingResult(result)
@@ -195,7 +290,7 @@ class PairingViewModel @Inject constructor(
     /**
      * Maneja el resultado del emparejamiento.
      */
-    private suspend fun handlePairingResult(result: PairingResult) {
+    internal suspend fun handlePairingResult(result: PairingResult) {
         when (result) {
             is PairingResult.Success -> {
                 Log.d(TAG, "Emparejamiento exitoso")
@@ -204,8 +299,20 @@ class PairingViewModel @Inject constructor(
                 // can pick up any grants approved while it was unpaired.
                 // This was previously a dead code path: `reinitializeAfterPairing`
                 // was defined but never called.
+                //
+                // Post-fix: `reinitializeAfterPairing` is exception-safe and
+                // returns [PostPairingSchedulingOutcome]. Pairing is
+                // irreversible so any scheduling failure MUST NOT block the
+                // transition to Success — log a contextual warning and
+                // continue.
                 withContext(Dispatchers.IO) {
-                    WorkerInitializer.reinitializeAfterPairing(context)
+                    val outcome = WorkerInitializer.reinitializeAfterPairing(context)
+                    if (outcome == PostPairingSchedulingOutcome.FAILED) {
+                        Log.w(
+                            TAG,
+                            "Programación post-emparejamiento falló; avanzando a Success de todos modos. deviceId=${result.deviceId}"
+                        )
+                    }
                 }
                 _uiState.value = PairingUiState.Success(result.deviceId)
                 // WU-D — DO NOT auto-emit NavigateToHome. The Device
@@ -315,7 +422,12 @@ class PairingViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "PairingViewModel"
-        private const val MAX_CHILD_FIRST_NAME_LENGTH = 80
+        // Aligned to supabase/functions/pairing/index.ts validation
+        // (1..32 chars after trim). Pre-fix, this constant was 80, so names
+        // 33..80 chars passed Android UI sanitization and then failed the
+        // server-side check with HTTP 400 "child_first_name es requerido
+        // (1..32 caracteres)".
+        private const val MAX_CHILD_FIRST_NAME_LENGTH = 32
 
         /** SavedStateHandle key for the persisted child first name. */
         const val KEY_CHILD_FIRST_NAME = "child_first_name"

@@ -257,12 +257,15 @@ class TimeExtraRepository @Inject constructor(
      */
     suspend fun processDenial(requestId: String) {
         try {
+            val request = timeRequestDao.getRequestByRequestIdOrServerId(requestId)
+                ?: return
+
             timeRequestDao.updateRequestStatus(
-                requestId = requestId,
+                requestId = request.request_id,
                 status = STATUS_DENIED,
                 respondedAt = timeProvider.wallInstant().toString()
             )
-            Log.d(TAG, "Request denied: $requestId")
+            Log.d(TAG, "Request denied: ${request.request_id}")
         } catch (e: Exception) {
             Log.e(TAG, "Error processing denial: ${e.message}")
         }

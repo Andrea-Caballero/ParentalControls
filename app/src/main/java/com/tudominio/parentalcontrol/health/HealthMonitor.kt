@@ -9,6 +9,9 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -129,14 +132,17 @@ class HealthMonitor @Inject constructor(
         val alert = OutboxEntity(
             id = UUID.randomUUID(),
             tipo = alertType,
-            payload_json = """
-                {
-                    "level": "${result.enforcementLevel}",
-                    "missing_permissions": "$missingPerms",
-                    "message": "La protección está degradada. Faltan: $missingPerms",
-                    "recommendations": ${result.recommendations.map { it.name }}
-                }
-            """.trimIndent(),
+            payload_json = buildJsonObject {
+                put("level", JsonPrimitive(result.enforcementLevel.name))
+                put("missing_permissions", JsonPrimitive(missingPerms))
+                put("message", JsonPrimitive("La protección está degradada. Faltan: $missingPerms"))
+                put(
+                    "recommendations",
+                    buildJsonArray {
+                        result.recommendations.forEach { add(JsonPrimitive(it.name)) }
+                    }
+                )
+            }.toString(),
             dedup_key = "health_degradation_${System.currentTimeMillis() / 86400000}",
             created_at = java.time.Instant.now().toString(),
             server_date = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
@@ -152,13 +158,14 @@ class HealthMonitor @Inject constructor(
         val alert = OutboxEntity(
             id = UUID.randomUUID(),
             tipo = "health_recovery",
-            payload_json = """
-                {
-                    "level": "${result.enforcementLevel}",
-                    "message": "La protección ha sido restaurada a ${result.enforcementLevel}",
-                    "timestamp": "${java.time.Instant.now()}"
-                }
-            """.trimIndent(),
+            payload_json = buildJsonObject {
+                put("level", JsonPrimitive(result.enforcementLevel.name))
+                put(
+                    "message",
+                    JsonPrimitive("La protección ha sido restaurada a ${result.enforcementLevel}")
+                )
+                put("timestamp", JsonPrimitive(java.time.Instant.now().toString()))
+            }.toString(),
             dedup_key = "health_recovery_${System.currentTimeMillis() / 86400000}",
             created_at = java.time.Instant.now().toString(),
             server_date = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
@@ -173,13 +180,11 @@ class HealthMonitor @Inject constructor(
     private suspend fun enqueueDeviceOwnerAlert() {
         val alert = OutboxEntity(
             tipo = "device_owner_enabled",
-            payload_json = """
-                {
-                    "level": "DEVICE_OWNER",
-                    "message": "El dispositivo ahora tiene Device Owner activo",
-                    "timestamp": "${java.time.Instant.now()}"
-                }
-            """.trimIndent(),
+            payload_json = buildJsonObject {
+                put("level", JsonPrimitive("DEVICE_OWNER"))
+                put("message", JsonPrimitive("El dispositivo ahora tiene Device Owner activo"))
+                put("timestamp", JsonPrimitive(java.time.Instant.now().toString()))
+            }.toString(),
             dedup_key = "device_owner_${System.currentTimeMillis() / 86400000}",
             created_at = java.time.Instant.now().toString(),
             server_date = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()

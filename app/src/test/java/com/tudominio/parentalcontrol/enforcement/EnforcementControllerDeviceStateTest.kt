@@ -10,7 +10,6 @@ import com.tudominio.parentalcontrol.data.model.PolicyEntity
 import com.tudominio.parentalcontrol.time.DefaultTimeProvider
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,12 +17,15 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.junit.Assert.assertEquals
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Smoke test: the `EnforcementController` MUST observe the row for
@@ -50,17 +52,18 @@ class EnforcementControllerDeviceStateTest {
 
     private lateinit var database: ParentalDatabase
     private lateinit var context: Context
-    private lateinit var lockManager: LockManager
-
-    private val testDispatcher = UnconfinedTestDispatcher()
+    private val directExecutor = Executor { it.run() }
 
     @Before
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         context = ApplicationProvider.getApplicationContext()
         database = Room.inMemoryDatabaseBuilder(
             context, ParentalDatabase::class.java
-        ).allowMainThreadQueries().build()
+        )
+            .allowMainThreadQueries()
+            .setQueryExecutor(directExecutor)
+            .setTransactionExecutor(directExecutor)
+            .build()
     }
 
     @After
@@ -71,6 +74,17 @@ class EnforcementControllerDeviceStateTest {
 
     @Test
     fun `lockNow fires when deviceState is LOCKED for the real device id`() = runTest {
+        // Align Dispatchers.Main with runTest's testScheduler so that
+        // `advanceUntilIdle()` drains the controllerScope launches on
+        // Main. The previous field-level `UnconfinedTestDispatcher()`
+        // created its own scheduler independent of runTest's, which
+        // made the test fail in isolation (the controller's launches
+        // stayed parked on a scheduler the test never advanced) and
+        // pass only when prior tests in the same JVM had warmed up
+        // the InvalidationTracker / executor state. Pinning the
+        // dispatcher and giving Room direct executors removes the
+        // order dependence.
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val deviceId = MutableStateFlow<String?>(null)
         // Seed the LOCKED row for the REAL device id BEFORE the
         // controller starts observing.
@@ -85,17 +99,22 @@ class EnforcementControllerDeviceStateTest {
         val am = mockk<DeviceAuthManager>(relaxed = true)
         every { am.deviceId } returns deviceId
         every { am.isPaired() } returns (deviceId.value != null)
-        lockManager = mockk<LockManager>(relaxed = true)
-        every { lockManager.isAdminActive() } returns true
+        val mockLock = mockk<LockManager>(relaxed = true)
+        val lockCallCount = AtomicInteger()
+        every { mockLock.isAdminActive() } returns true
+        every { mockLock.lockNow() } answers {
+            lockCallCount.incrementAndGet()
+            true
+        }
         val controller = EnforcementController(
             context = context,
             database = database,
             timeProvider = DefaultTimeProvider(context),
             authManager = am,
-            lockManager = lockManager,
+            lockManager = mockLock,
         )
         deviceId.value = "dev-real"
         testScheduler.advanceUntilIdle()
-        verify(atLeast = 1) { lockManager.lockNow() }
+        assertEquals(1, lockCallCount.get())
     }
 }

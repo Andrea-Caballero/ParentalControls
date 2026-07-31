@@ -13,6 +13,7 @@ import com.tudominio.parentalcontrol.data.repository.TimeExtraRepository
 import com.tudominio.parentalcontrol.di.SupabaseClient
 import com.tudominio.parentalcontrol.network.ConnectionState
 import com.tudominio.parentalcontrol.network.SupabaseClientProvider
+import com.tudominio.parentalcontrol.time.TimeProvider
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -25,6 +26,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import java.time.ZoneOffset
+import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -135,7 +137,8 @@ private data class TimeRequestResponse(
 class SyncManager @Inject constructor(
     @ApplicationContext private val context: Context,
     @SupabaseClient private val httpClient: HttpClient,
-    private var database: ParentalDatabase
+    private var database: ParentalDatabase,
+    private val timeProvider: TimeProvider
 ) {
     companion object {
         private const val TAG = "SyncManager"
@@ -267,7 +270,9 @@ class SyncManager @Inject constructor(
         val accessToken = authManager.getAccessToken()
             ?: return@withContext SyncResult.Offline
 
-        val deviceId = authManager.deviceId.value ?: "default"
+        val deviceId = authManager.deviceId.value
+            ?.takeIf { it.isNotBlank() }
+            ?: return@withContext SyncResult.Offline
 
         return@withContext try {
             val localVersion = database.policyDao().getLocalVersion(deviceId) ?: 0L
@@ -288,6 +293,8 @@ class SyncManager @Inject constructor(
                     if (policyResponse.version > localVersion) {
                         applyPolicy(policyResponse, deviceId)
                     }
+
+                    confirmTrustedTime(policyResponse, timeProvider)
 
                     policyResponse.server_time?.let { serverTime ->
                         val localTime = System.currentTimeMillis() / 1000
@@ -681,6 +688,17 @@ class SyncManager @Inject constructor(
     private suspend fun updatePendingCount() {
         _pendingCount.value = database.outboxDao().getPendingCountFlow().first()
     }
+}
+
+internal fun confirmTrustedTime(
+    policyResponse: PolicyPullResponse,
+    timeProvider: TimeProvider
+): Boolean {
+    val serverTime = policyResponse.server_time ?: return false
+    if (serverTime <= 0L) return false
+
+    timeProvider.confirmTrustedTime(Instant.ofEpochSecond(serverTime))
+    return true
 }
 
 /**

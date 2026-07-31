@@ -13,8 +13,55 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.Instant
 
 class TimeProviderTest {
+
+    @Test
+    fun `trusted time starts unavailable and follows monotonic anchor`() {
+        val provider = FakeTimeProvider(fakeElapsed = 1_000L, fakeWallMillis = 50_000L)
+        assertNull(provider.trustedNow())
+        assertEquals(TrustedTimeState.Unavailable, provider.trustedTimeState.value)
+        provider.confirmTrustedTime(Instant.ofEpochMilli(100_000L))
+        provider.advanceTime(2_000L)
+        provider.setTime(1_000L)
+        assertEquals(102_000L, provider.trustedNow()?.toEpochMilli())
+    }
+
+    @Test
+    fun `older confirmation is clamped and elapsed regression invalidates trust`() {
+        val provider = FakeTimeProvider(fakeElapsed = 2_000L)
+        provider.confirmTrustedTime(Instant.ofEpochMilli(10_000L))
+        provider.advanceTime(500L)
+        provider.confirmTrustedTime(Instant.ofEpochMilli(9_000L))
+        assertEquals(10_500L, provider.trustedNow()?.toEpochMilli())
+        provider.setElapsedRealtime(1_000L)
+        assertNull(provider.trustedNow())
+        assertEquals(TrustedTimeState.Unavailable, provider.trustedTimeState.value)
+    }
+
+    @Test
+    fun `newer confirmation advances the trusted anchor`() {
+        val provider = FakeTimeProvider(fakeElapsed = 1_000L)
+        provider.confirmTrustedTime(Instant.ofEpochMilli(10_000L))
+        provider.advanceTime(500L)
+
+        provider.confirmTrustedTime(Instant.ofEpochMilli(20_000L))
+
+        assertEquals(20_000L, provider.trustedNow()?.toEpochMilli())
+    }
+
+    @Test
+    fun `fake provider supports trust loss recovery and reboot`() {
+        val provider = FakeTimeProvider(fakeElapsed = 1_000L)
+        provider.confirmTrustedTime(Instant.ofEpochMilli(10_000L))
+        provider.loseTrustedTime()
+        assertNull(provider.trustedNow())
+        provider.confirmTrustedTime(Instant.ofEpochMilli(20_000L))
+        assertEquals(20_000L, provider.trustedNow()?.toEpochMilli())
+        provider.simulateReboot()
+        assertEquals(TrustedTimeState.Unavailable, provider.trustedTimeState.value)
+    }
 
     @Test
     fun `FakeTimeProvider - elapsedRealtime returns correct value`() {

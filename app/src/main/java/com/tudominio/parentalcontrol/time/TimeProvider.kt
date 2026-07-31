@@ -8,6 +8,9 @@ import android.os.Build
 import android.os.SystemClock
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import java.time.Instant
 import java.time.LocalDate
@@ -21,7 +24,18 @@ import java.time.ZoneOffset
  *
  * JVM pura - sin dependencias android.* en la interfaz ni implementaciones fake.
  */
+sealed interface TrustedTimeState {
+    data object Unavailable : TrustedTimeState
+    data class Available(val anchor: Instant, val anchorElapsedMs: Long) : TrustedTimeState
+}
+
 interface TimeProvider {
+    val trustedTimeState: StateFlow<TrustedTimeState>
+
+    fun trustedNow(): Instant?
+
+    fun confirmTrustedTime(serverTime: Instant)
+
     /**
      * Hora monotónica en milisegundos (desde boot).
      * Útil para medir duraciones sin afectarse por cambios de reloj.
@@ -102,6 +116,10 @@ class DefaultTimeProvider(
     private var serverDateOverride: LocalDate? = null
 ) : TimeProvider {
 
+    private val trustedTimeLock = Any()
+    private val _trustedTimeState = MutableStateFlow<TrustedTimeState>(TrustedTimeState.Unavailable)
+    override val trustedTimeState: StateFlow<TrustedTimeState> = _trustedTimeState.asStateFlow()
+
     private var baselineMonotonic: Long = 0L
     private var baselineWall: Long = 0L
     private var baselineZone: ZoneId = ZoneId.systemDefault()
@@ -121,6 +139,25 @@ class DefaultTimeProvider(
     }
 
     override fun elapsedRealtime(): Long = SystemClock.elapsedRealtime()
+
+    override fun trustedNow(): Instant? = synchronized(trustedTimeLock) {
+        val state = _trustedTimeState.value
+        if (state !is TrustedTimeState.Available) return@synchronized null
+
+        val elapsed = elapsedRealtime()
+        if (elapsed < state.anchorElapsedMs) {
+            _trustedTimeState.value = TrustedTimeState.Unavailable
+            return@synchronized null
+        }
+        state.anchor.plusMillis(elapsed - state.anchorElapsedMs)
+    }
+
+    override fun confirmTrustedTime(serverTime: Instant) = synchronized(trustedTimeLock) {
+        val elapsed = elapsedRealtime()
+        val current = trustedNow()
+        val anchor = if (current == null || serverTime.isAfter(current)) serverTime else current
+        _trustedTimeState.value = TrustedTimeState.Available(anchor, elapsed)
+    }
 
     override fun wallTimeMillis(): Long = System.currentTimeMillis()
 
@@ -244,6 +281,10 @@ class FakeTimeProvider(
     private var fakeServerDate: LocalDate? = null
 ) : TimeProvider {
 
+    private val trustedTimeLock = Any()
+    private val _trustedTimeState = MutableStateFlow<TrustedTimeState>(TrustedTimeState.Unavailable)
+    override val trustedTimeState: StateFlow<TrustedTimeState> = _trustedTimeState.asStateFlow()
+
     private var baselineMonotonic: Long = 0L
     private var baselineWall: Long = 0L
     private var baselineZone: ZoneId = fakeZone
@@ -263,6 +304,23 @@ class FakeTimeProvider(
     }
 
     override fun elapsedRealtime(): Long = fakeElapsed
+
+    override fun trustedNow(): Instant? = synchronized(trustedTimeLock) {
+        val state = _trustedTimeState.value
+        if (state !is TrustedTimeState.Available) return@synchronized null
+
+        if (fakeElapsed < state.anchorElapsedMs) {
+            _trustedTimeState.value = TrustedTimeState.Unavailable
+            return@synchronized null
+        }
+        state.anchor.plusMillis(fakeElapsed - state.anchorElapsedMs)
+    }
+
+    override fun confirmTrustedTime(serverTime: Instant) = synchronized(trustedTimeLock) {
+        val current = trustedNow()
+        val anchor = if (current == null || serverTime.isAfter(current)) serverTime else current
+        _trustedTimeState.value = TrustedTimeState.Available(anchor, fakeElapsed)
+    }
 
     override fun wallTimeMillis(): Long = fakeWallMillis
 
@@ -360,6 +418,20 @@ class FakeTimeProvider(
 
     fun setTime(millis: Long) {
         fakeWallMillis = millis
+    }
+
+    fun setElapsedRealtime(millis: Long) {
+        fakeElapsed = millis
+    }
+
+    fun loseTrustedTime() = synchronized(trustedTimeLock) {
+        _trustedTimeState.value = TrustedTimeState.Unavailable
+    }
+
+    fun simulateReboot() = synchronized(trustedTimeLock) {
+        _trustedTimeState.value = TrustedTimeState.Unavailable
+        baselineMonotonic = fakeElapsed
+        baselineWall = fakeWallMillis
     }
 
     fun setZone(zone: ZoneId) {

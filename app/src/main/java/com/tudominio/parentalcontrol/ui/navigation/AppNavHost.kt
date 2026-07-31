@@ -1,6 +1,7 @@
 package com.tudominio.parentalcontrol.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -81,7 +82,7 @@ fun AppNavHost(
     // contract and regression test in NavGraphTest.
     val role = authManager.getRole()
     val isChildDevice = resolveIsChildDevice(isPaired = isPaired, role = role)
-    val deviceId = authManager.deviceId.value.orEmpty()
+    val deviceId = authManager.deviceId.collectAsState().value.orEmpty()
 
     NavGraph(
         isPaired = isPaired,

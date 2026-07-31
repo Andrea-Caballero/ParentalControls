@@ -127,6 +127,12 @@ class RealtimeManager private constructor(
     private suspend fun connectWebSocket() {
         val accessToken = authManager.getAccessToken()
             ?: throw IllegalStateException("No access token")
+
+        val deviceId = authManager.deviceId.value
+        if (deviceId.isNullOrBlank()) {
+            Log.w(TAG, "Skipping Realtime connection: no device id")
+            return
+        }
         
         val supabaseUrl = SupabaseClientProvider.SUPABASE_URL
             .replace("https://", "")
@@ -152,9 +158,9 @@ class RealtimeManager private constructor(
                 Log.d(TAG, "Conectado a Realtime")
                 
                 // Suscribirse a canales relevantes
-                sendSubscription("device:${authManager.deviceId.value}:policy", "1")
-                sendSubscription("device:${authManager.deviceId.value}:grants", "2")
-                sendSubscription("device:${authManager.deviceId.value}:requests", "3")
+                sendSubscription("device:$deviceId:policy", "1")
+                sendSubscription("device:$deviceId:grants", "2")
+                sendSubscription("device:$deviceId:requests", "3")
                 
                 // Escuchar mensajes
                 for (frame in incoming) {

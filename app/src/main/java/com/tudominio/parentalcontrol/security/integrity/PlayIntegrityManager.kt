@@ -98,13 +98,14 @@ class PlayIntegrityManager private constructor(
      */
     private fun generateNonce(customNonce: String?): String {
         val timestamp = System.currentTimeMillis()
-        val deviceId = authManager.deviceId.value ?: "unknown"
         
         return buildString {
             append(NONCE_PREFIX)
             append(timestamp)
             append("_")
-            append(deviceId)
+            authManager.deviceId.value
+                ?.takeIf { it.isNotBlank() }
+                ?.let { append(it) }
             customNonce?.let {
                 append("_")
                 append(it)
@@ -153,7 +154,9 @@ class PlayIntegrityManager private constructor(
                 val accessToken = authManager.getAccessToken()
                     ?: return@withContext IntegrityVerificationResult.Error("No access token")
                 
-                val deviceId = authManager.deviceId.value ?: ""
+                val deviceId = authManager.deviceId.value
+                    ?.takeIf { it.isNotBlank() }
+                    ?: return@withContext IntegrityVerificationResult.Error("No device id")
                 
                 val response = clientProvider.httpClient.post(
                     "${SupabaseClientProvider.SUPABASE_URL}/functions/v1/verify-integrity"

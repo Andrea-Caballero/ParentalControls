@@ -1,39 +1,39 @@
 // T15: Heartbeat - Edge Function
 // Actualiza device_heartbeats y devices.last_seen_at
+//
+// BLK-01 hardening: device_id now comes from the verified user's
+// `app_metadata.device_id` (server-side state set by the pairing
+// flow), not from a manually decoded JWT payload. The service-role
+// client is constructed only after Supabase Auth has cryptographically
+// validated the Bearer token via `supabase.auth.getUser`.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyAuth } from "../_shared/jwt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+export async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const auth = await verifyAuth({
+    authHeader: req.headers.get("Authorization"),
+    corsHeaders,
+    env: {
+      url: Deno.env.get("SUPABASE_URL") ?? "",
+      anonKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    },
+    requireDevice: true,
+  });
+  if (!auth.ok) return auth.response;
+  const deviceId = auth.deviceId as string;
+
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Token requerido" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const deviceId = payload.device_id;
-
-    if (!deviceId) {
-      return new Response(
-        JSON.stringify({ error: "device_id no encontrado en token" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const {
       battery_level,
       is_charging,
@@ -115,10 +115,15 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Heartbeat error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Heartbeat error:", message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+}
+
+if (import.meta.main) {
+  serve(handleRequest);
+}

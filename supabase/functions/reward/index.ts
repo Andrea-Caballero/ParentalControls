@@ -1,33 +1,25 @@
 // T15: Reward Grant - Edge Function
-// Crea grant de recompensa respetando topes (T29)
+// Otorga minutos extra a un dispositivo como recompensa, con topes
+// diarios/semanales y verificación de propiedad.
+//
+// BLK-01 hardening: this handler used to derive `parentId` from a
+// manually base64-decoded JWT `sub` claim — that decode does NOT
+// verify the signature, expiration, or revocation. An attacker could
+// craft any `parentId` they wanted and grant rewards to themselves.
+// The handler now uses `supabase.auth.getUser(token)` (via
+// `_shared/jwt.ts`) to perform cryptographic verification and reads
+// `parentId` from the server-controlled `user.id`. The service-role
+// client is only constructed AFTER a verified identity has been
+// returned.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyAuth } from "../_shared/jwt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-function decodeJwtPayload(authHeader: string): Record<string, unknown> | null {
-  const match = authHeader.match(/^Bearer\s+(\S+)$/i);
-  if (!match) return null;
-
-  const segments = match[1].split(".");
-  if (segments.length !== 3 || !segments[1]) return null;
-
-  try {
-    const payload = segments[1].replace(/-/g, "+").replace(/_/g, "/");
-    const paddedPayload = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
-    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(paddedPayload)) return null;
-    const decoded = JSON.parse(atob(paddedPayload));
-    return decoded && typeof decoded === "object" && !Array.isArray(decoded)
-      ? decoded as Record<string, unknown>
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 // Topes por día para recompensas (configurable)
 const REWARD_LIMITS = {
@@ -40,25 +32,22 @@ export async function handleRequest(req: Request): Promise<Response> {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const auth = await verifyAuth({
+    authHeader: req.headers.get("Authorization"),
+    corsHeaders,
+    env: {
+      url: Deno.env.get("SUPABASE_URL") ?? "",
+      anonKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    },
+    // Parent endpoint — no device_id required from the JWT; the
+    // caller supplies the device_id in the body and the handler
+    // checks ownership against the verified parent.
+    requireDevice: false,
+  });
+  if (!auth.ok) return auth.response;
+  const parentId = auth.parentId;
+
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Token requerido" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const jwtPayload = decodeJwtPayload(authHeader);
-    const parentId = jwtPayload?.sub;
-
-    if (!parentId) {
-      return new Response(
-        JSON.stringify({ error: "Usuario no autenticado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const { device_id, minutes, reason } = await req.json();
 
     if (!device_id || !minutes) {
@@ -68,6 +57,8 @@ export async function handleRequest(req: Request): Promise<Response> {
       );
     }
 
+    // Constructed only after the JWT has been cryptographically
+    // verified — see BLK-01.
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""

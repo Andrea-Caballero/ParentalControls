@@ -21,7 +21,7 @@ Lets the parent curate which apps a specific child device may launch by toggling
 - **THEN** the per-app policy badges SHALL re-load from `app_policies` for the newly selected `device_id`.
 
 ### Requirement: Toggling an app updates its app_policies state
-Tapping a row SHALL toggle that app's `app_policies` row for the selected device between `ALLOWED` and `BLOCKED`, persisting via `appPolicyDao.upsertAppPolicy`.
+Tapping a row SHALL toggle that app's `app_policies` row for the selected device between `ALLOWED` and `BLOCKED`, persisting via `appPolicyDao.upsertAppPolicy`. The underlying policy mutation RPC path MUST be reachable only from the service boundary; direct public API-role execution MUST be denied.
 
 #### Scenario: Tap to block an ALLOWED app
 - **WHEN** the parent taps an app currently marked `ALLOWED`,
@@ -67,3 +67,33 @@ The Policy tab of `DeviceDetailScreen` SHALL include an "Add to block list" affo
 - Pushing `app_policies` parent → child — handled by `get-policy` + `SyncManager` (hotfix #2); no changes here.
 - Uninstall detection or cleanup of `app_policies` for removed packages.
 - Category-level policies (the `category` column is left untouched).
+
+## Verification hooks
+
+### Requirement: Privileged Supabase RPCs are service-only
+The system MUST expose privileged or internal Supabase RPCs only through the service boundary. API roles MUST be denied direct EXECUTE access, and SECURITY DEFINER functions MUST use a pinned search path.
+
+#### Scenario: Service role can call guarded RPCs
+- **GIVEN** a caller operating through the service boundary
+- **WHEN** it invokes a privileged RPC
+- **THEN** the call MUST succeed only if the authorization checks pass
+- **AND** the function search path MUST remain pinned
+
+#### Scenario: API role is blocked from direct access
+- **GIVEN** a public API role
+- **WHEN** it attempts to invoke the same RPC directly
+- **THEN** the call MUST be rejected
+- **AND** no internal helper MUST be reachable
+
+### Requirement: Parent-facing check-in RPCs honor caller identity and RLS
+Parent-facing check-in RPCs MUST validate the authenticated caller and MUST rely on row-level security for ownership checks. A caller MUST NOT check in or mutate a device owned by another parent.
+
+#### Scenario: Parent checks in own device
+- **GIVEN** an authenticated parent and their own device row
+- **WHEN** the check-in RPC is called
+- **THEN** the request MUST succeed only for that owned device
+
+#### Scenario: Cross-parent check-in is rejected
+- **GIVEN** an authenticated parent and a device owned by another parent
+- **WHEN** the check-in RPC is called for that device
+- **THEN** the request MUST be rejected

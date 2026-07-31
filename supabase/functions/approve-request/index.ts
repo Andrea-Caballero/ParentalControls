@@ -1,49 +1,23 @@
 // T15: Approve Request - Edge Function
-// Aprueba o rechaza un time_request de forma ATÓMICA vía la RPC
-// `approve_request_atomic` (supabase/migrations/012_approve_request_atomic.sql).
 //
-//   - action: "APPROVE" (default)  -> la RPC inserta grant + flip verdict
-//   - action: "DENY"               -> la RPC flip verdict sin grant
-//
-// Garantías:
-//   - Verdict + grant commitean en UNA transacción Postgres (un
-//     solo commit boundary). Un retry tras un fallo de red no
-//     puede crear un grant duplicado ni dejar el verdict
-//     aprobado sin grant.
-//   - `UNIQUE(grants.request_id)` refuerza idempotencia en DB.
-//   - FCM solo se dispara DESPUÉS de un commit exitoso.
-//   - Auth y ownership se validan en el handler Y en la RPC
-//     (defense in depth: si un caller futuro skipea el JWT
-//     precheck, la RPC todavía rechaza).
+// BLK-01 hardening: this handler used to derive `parentId` from a
+// manually base64-decoded JWT `sub` claim — that decode does NOT
+// verify the signature, expiration, or revocation. An attacker could
+// craft any `parentId` they wanted. The handler now uses
+// `supabase.auth.getUser(token)` (via `_shared/jwt.ts`) to perform
+// cryptographic verification and reads `parentId` from the
+// server-controlled `user.id`. The service-role client is only
+// constructed AFTER a verified identity has been returned.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyAuth } from "../_shared/jwt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
-
-function decodeJwtPayload(authHeader: string): Record<string, unknown> | null {
-  const match = authHeader.match(/^Bearer\s+(\S+)$/i);
-  if (!match) return null;
-
-  const segments = match[1].split(".");
-  if (segments.length !== 3 || !segments[1]) return null;
-
-  try {
-    const payload = segments[1].replace(/-/g, "+").replace(/_/g, "/");
-    const paddedPayload = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
-    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(paddedPayload)) return null;
-    const decoded = JSON.parse(atob(paddedPayload));
-    return decoded && typeof decoded === "object" && !Array.isArray(decoded)
-      ? decoded as Record<string, unknown>
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Handle an incoming request to the edge function. Exported so the
@@ -55,27 +29,24 @@ export async function handleRequest(req: Request): Promise<Response> {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const auth = await verifyAuth({
+    authHeader: req.headers.get("Authorization"),
+    corsHeaders,
+    env: {
+      url: Deno.env.get("SUPABASE_URL") ?? "",
+      anonKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    },
+    // Parent endpoint — no device_id required. The handler explicitly
+    // checks ownership of the device before any privileged work.
+    requireDevice: false,
+  });
+  if (!auth.ok) return auth.response;
+  // auth.parentId comes from the verified user record, not the JWT
+  // `sub` claim. See `_shared/jwt.ts` for the cryptographic
+  // verification contract.
+  const parentId = auth.parentId;
+
   try {
-    // Solo padres pueden aprobar/rechazar
-     const authHeader = req.headers.get("Authorization");
-     if (!authHeader) {
-       return new Response(
-         JSON.stringify({ error: "Token requerido" }),
-         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-       );
-     }
-
-     const jwtPayload = decodeJwtPayload(authHeader);
-     const parentId = jwtPayload?.sub;
-
-     if (!parentId) {
-
-      return new Response(
-        JSON.stringify({ error: "Usuario no autenticado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // action: "APPROVE" | "DENY" (acepta alias "decision" también)
     const {
       request_id,
@@ -108,6 +79,8 @@ export async function handleRequest(req: Request): Promise<Response> {
       );
     }
 
+    // Constructed only after the JWT has been cryptographically
+    // verified — see BLK-01.
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -176,10 +149,6 @@ export async function handleRequest(req: Request): Promise<Response> {
     );
 
     if (rpcError) {
-      // La RPC falló a nivel de transporte o Postgres. Por el
-      // contrato atómico, NINGÚN cambio de estado se persistió:
-      // o la RPC commitea todo o nada. Devolvemos 500 sin enviar
-      // FCM para no notificar al niño de un cambio que no ocurrió.
       throw new Error(`Error en approve_request_atomic: ${rpcError.message}`);
     }
 
@@ -226,8 +195,6 @@ export async function handleRequest(req: Request): Promise<Response> {
     }
 
     if (!result.success || !result.decision) {
-      // La RPC devolvió un payload inesperado. No podemos confiar en
-      // que el commit ocurrió; no notificamos al niño.
       throw new Error("Respuesta inesperada de approve_request_atomic");
     }
 
@@ -323,56 +290,34 @@ async function sendFcmToDevice(
   }
 }
 
-/**
- * Slice A — 1h auto-DENY sweep (per `time-request-approval/spec.md`
- * ADDED Requirement + tasks.md A.2.7).
- *
- * Updates every PENDING `time_requests` row on [deviceId] whose
- * `created_at` is older than 1 hour to:
- *   status       = "DENIED"
- *   denied_at    = NOW()
- *   response_text = "Auto-denied: no parent response within 1h"
- *
- * The PATCH is scoped by device_id (the parent on the device) and
- * idempotent (the WHERE status='PENDING' predicate makes a second
- * call within the same window a no-op). Best-effort: if the update
- * fails (network blip, RLS misconfig), the atomic approval RPC
- * still runs — the sweep failure is logged but does not block the
- * parent's decision.
- *
- * The PostgREST filter shape is
- *   /rest/v1/time_requests?status=eq.PENDING&device_id=eq.{deviceId}&created_at=lt.{iso}
- * which the production Supabase client translates into the SQL
- *   UPDATE time_requests SET ...
- *   WHERE status = 'PENDING'
- *     AND device_id = '{deviceId}'
- *     AND created_at < '{iso}';
- *
- * @param supabase  The service-role Supabase client (bypasses RLS).
- * @param deviceId  The device_id of the current approve-request call;
- *                  the sweep only touches PENDING rows on THIS device.
- */
+// Slice A — 1h auto-DENY sweep. Mark every PENDING time_request on
+// the device older than 1 hour as DENIED so the parent UI does not
+// surface stale requests. The sweep is idempotent — the WHERE
+// clause gates on status='PENDING' AND created_at<now()-1h, so a
+// second call within the same window is a no-op. See
+// `time-request-approval/spec.md` ADDED Requirement + tasks.md A.2.7.
 async function autoDenyStaleRequests(
-  supabase: SupabaseClient,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
   deviceId: string,
 ): Promise<void> {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   try {
-    const { error } = await supabase
+    await supabase
       .from("time_requests")
       .update({
         status: "DENIED",
-        denied_at: new Date().toISOString(),
         response_text: "Auto-denied: no parent response within 1h",
+        denied_at: new Date().toISOString(),
       })
-      .eq("status", "PENDING")
       .eq("device_id", deviceId)
+      .eq("status", "PENDING")
       .lt("created_at", oneHourAgo);
-    if (error) {
-      console.error("autoDenyStaleRequests failed:", error.message);
-    }
   } catch (e) {
-    console.error("autoDenyStaleRequests threw:", e);
+    // Best-effort: an auto-DENY failure must not block the main
+    // approval. The user gets a logged warning and the auto-DENY
+    // is retried on the next request for the same device.
+    console.warn("autoDenyStaleRequests non-fatal failure:", e);
   }
 }
 

@@ -1,5 +1,7 @@
 package com.tudominio.parentalcontrol.ui.child.status
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -14,19 +16,25 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tudominio.parentalcontrol.admin.LockManager
 import com.tudominio.parentalcontrol.copy.CopyManager
 import com.tudominio.parentalcontrol.health.DegradationAlertManager
 import com.tudominio.parentalcontrol.ui.child.components.DegradedAlertDialog
 import com.tudominio.parentalcontrol.ui.child.components.RecoveryDialog
 import com.tudominio.parentalcontrol.ui.child.components.RewardBanner
 import com.tudominio.parentalcontrol.ui.child.components.RewardReceivedDialog
+import com.tudominio.parentalcontrol.workers.WorkerInitializer
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ChildStatusScreen(
@@ -41,7 +49,35 @@ fun ChildStatusScreen(
     val rewardBalance by viewModel.rewardBalance.collectAsState()
     val degradationCauses by viewModel.degradationCauses.collectAsState()
     val showRecovery by viewModel.showRecoveryDialog.collectAsState()
-    
+    // WU-D follow-up — collect the banner visibility from the shared
+    // coordinator. The banner is gated on `deviceAdminBanner.value`
+    // (true when NeedsActivation OR Dismissed(skipUsed=true)).
+    val bannerVisible by viewModel.deviceAdminBanner.collectAsState()
+    val context = LocalContext.current
+    val lockManager = remember { LockManager(context) }
+    val adminLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // The ACTION_ADD_DEVICE_ADMIN activity returns RESULT_OK on
+        // activation and RESULT_CANCELED on dismiss. Re-check the
+        // real admin state — never trust the result code alone.
+        viewModel.syncDeviceAdminState(lockManager.isAdminActive())
+    }
+    // Process-death safe reconciliation. The coordinator is in-memory
+    // and restarts Idle after the OS kills the process, so without this
+    // hook the banner would stay hidden even when Device Admin is
+    // inactive. Re-derive from the actual system state on every cold
+    // start. Does NOT auto-launch the activation intent — the user must
+    // tap "Activar" to engage the system prompt.
+    LaunchedEffect(lockManager) {
+        viewModel.syncDeviceAdminState(lockManager.isAdminActive())
+    }
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            WorkerInitializer.recoverAfterPairing(context.applicationContext)
+        }
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
     
     var showRewardDialog by remember { mutableStateOf(false) }
@@ -134,7 +170,9 @@ fun ChildStatusScreen(
                         if (!state.hasPendingRequest) {
                             onRequestExtraTime()
                         }
-                    }
+                    },
+                    bannerVisible = bannerVisible,
+                    onActivateAdmin = { adminLauncher.launch(lockManager.getEnableAdminIntent()) }
                 )
             }
             
@@ -164,17 +202,19 @@ private fun LoadingContent() {
 }
 
 @Composable
-private fun StatusContent(
+internal fun StatusContent(
     state: ChildStatusUiState.Content,
     warningLevel: WarningLevel,
     hasPendingRequest: Boolean,
     rewardBalance: Long,
     copyManager: CopyManager,
-    onRequestExtraTime: () -> Unit
+    onRequestExtraTime: () -> Unit,
+    bannerVisible: Boolean = false,
+    onActivateAdmin: () -> Unit = {}
 ) {
     val extraTimeCopy = copyManager.getExtraTime()
     val blockCopy = copyManager.getBlock()
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -182,6 +222,15 @@ private fun StatusContent(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        AnimatedVisibility(
+            visible = bannerVisible,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            DeviceAdminActivationBanner(onActivate = onActivateAdmin)
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         TimeRemainingCard(
             timeRemaining = state.timeRemaining,
             warningLevel = warningLevel,
@@ -504,6 +553,67 @@ private fun ExtraTimeButton(
             text = if (hasPendingRequest) copy.pending else copy.request,
             style = MaterialTheme.typography.titleMedium
         )
+    }
+}
+
+/**
+ * WU-D follow-up — one-time informational banner rendered at the top
+ * of the child status content when Device Admin is not yet active
+ * (fresh pairing + "Más tarde" or never confirmed). Tap launches the
+ * system activation flow via [LockManager.getEnableAdminIntent]; the
+ * result is re-checked in ChildStatusScreen's launcher callback so a
+ * cancellation leaves the banner in place.
+ *
+ * Exposed `internal` so the renderer test can mount it without
+ * spinning up the full ChildStatusViewModel. Test tags are part of
+ * the public surface — do not rename without updating
+ * ChildStatusDeviceAdminBannerRendererTest.
+ */
+@Composable
+internal fun DeviceAdminActivationBanner(
+    onActivate: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("child_status_admin_banner"),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.AdminPanelSettings,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Activa el control parental",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Text(
+                    text = "Permite que el panel parental bloquee este dispositivo remotamente.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Button(
+                onClick = onActivate,
+                modifier = Modifier.testTag("child_status_admin_activate_button")
+            ) {
+                Text("Activar")
+            }
+        }
     }
 }
 

@@ -239,7 +239,7 @@ class TimeExtraViewModel(
         
         try {
             val expiresAt = Instant.parse(grant.expiresAt)
-            val now = Instant.now()
+            val now = timeProvider.wallInstant()
             val seconds = ChronoUnit.SECONDS.between(now, expiresAt)
             
             _nextExpireCountdown.value = if (seconds > 0) seconds else 0
@@ -256,7 +256,7 @@ class TimeExtraViewModel(
     private fun calculateRemainingMinutes(grant: GrantEntity): Long {
         return try {
             val expiresAt = Instant.parse(grant.expires_at)
-            val now = Instant.now()
+            val now = timeProvider.wallInstant()
             val seconds = ChronoUnit.SECONDS.between(now, expiresAt)
             maxOf(0, seconds / 60)
         } catch (e: Exception) {

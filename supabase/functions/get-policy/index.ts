@@ -1,42 +1,50 @@
 // T15: GET Policy - Edge Function
 // Devuelve el JSON de política ensamblado según §0.3
+//
+// BLK-01 hardening: this handler used to derive `device_id` from a
+// manually base64-decoded JWT payload — that decode does NOT verify
+// the signature, expiration, or revocation. An attacker could craft
+// any `device_id` they wanted. The handler now uses
+// `supabase.auth.getUser(token)` to perform cryptographic
+// verification (via the shared `_shared/jwt.ts` helper) and reads
+// `device_id` from the server-controlled `user.app_metadata.device_id`
+// (set by the pairing RPC). The service-role client is only created
+// AFTER a verified identity has been returned, so failed
+// authentication cannot reach privileged code paths.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyAuth } from "../_shared/jwt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+/** Exported for the accompanying test in `index_test.ts`. */
+export async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const auth = await verifyAuth({
+    authHeader: req.headers.get("Authorization"),
+    corsHeaders,
+    env: {
+      url: Deno.env.get("SUPABASE_URL") ?? "",
+      anonKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    },
+    requireDevice: true,
+  });
+  if (!auth.ok) return auth.response;
+  // auth.deviceId is guaranteed to be a non-empty string when
+  // requireDevice:true and verification succeeded.
+  const deviceId = auth.deviceId as string;
+
   try {
-    // Extraer device_id del JWT (inyectado por hook de T14)
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Token requerido" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Decodificar JWT para obtener device_id
-    const token = authHeader.replace("Bearer ", "");
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const deviceId = payload.device_id;
-
-    if (!deviceId) {
-      return new Response(
-        JSON.stringify({ error: "device_id no encontrado en token" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Cliente con service_role para bypass RLS en get_device_policy
+    // Cliente con service_role para bypass RLS en get_device_policy.
+    // Constructed ONLY after the JWT has been cryptographically
+    // verified — see BLK-01.
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -78,10 +86,15 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Get policy error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Get policy error:", message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+}
+
+if (import.meta.main) {
+  serve(handleRequest);
+}

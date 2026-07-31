@@ -8,6 +8,10 @@ import com.tudominio.parentalcontrol.data.model.TimeRequestEntity
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.time.Instant
@@ -78,15 +82,15 @@ class OutboxManager @Inject constructor(
      */
     suspend fun enqueueTimeRequest(request: TimeRequestEntity): Boolean {
         return try {
-            val payload = """
-                {
-                    "request_id": "${request.request_id}",
-                    "device_id": "${request.device_id}",
-                    "minutes_requested": ${request.minutes_requested},
-                    "reason": "${request.reason}",
-                    "created_at": ${request.created_at}
-                }
-            """.trimIndent()
+            val payload = buildOutboxPayloadJson(
+                mapOf(
+                    "request_id" to request.request_id,
+                    "device_id" to request.device_id,
+                    "minutes_requested" to request.minutes_requested,
+                    "reason" to request.reason,
+                    "created_at" to request.created_at,
+                )
+            )
 
             val dedupKey = "time_request_${request.request_id}"
 
@@ -111,17 +115,13 @@ class OutboxManager @Inject constructor(
     /**
      * Encola un evento genérico para envío posterior.
      */
-    suspend fun enqueueEvent(eventType: String, payload: Map<String, Any>): Boolean {
+    suspend fun enqueueEvent(eventType: String, payload: Map<String, Any?>): Boolean {
         return try {
-            val jsonPayload = payload.entries.joinToString(",") { (k, v) ->
-                "\"$k\": ${if (v is String) "\"$v\"" else v}"
-            }
-
             val dedupKey = "${eventType}_${System.currentTimeMillis()}"
 
             val outboxItem = OutboxEntity(
                 tipo = eventType,
-                payload_json = "{ $jsonPayload }",
+                payload_json = buildOutboxPayloadJson(payload),
                 dedup_key = dedupKey,
                 created_at = Instant.now().toString(),
                 server_date = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
@@ -285,6 +285,23 @@ class OutboxManager @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up: ${e.message}")
         }
+    }
+
+    private fun buildOutboxPayloadJson(payload: Map<String, Any?>): String {
+        return buildJsonObject {
+            payload.forEach { (key, value) ->
+                put(key, value.toJsonElement())
+            }
+        }.toString()
+    }
+
+    private fun Any?.toJsonElement(): JsonElement = when (this) {
+        null -> JsonNull
+        is JsonElement -> this
+        is String -> JsonPrimitive(this)
+        is Number -> JsonPrimitive(this)
+        is Boolean -> JsonPrimitive(this)
+        else -> JsonPrimitive(this.toString())
     }
 }
 

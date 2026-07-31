@@ -8,6 +8,8 @@ import android.util.Log
 import com.tudominio.parentalcontrol.BuildConfig
 import com.tudominio.parentalcontrol.data.remote.MockSupabaseEngine
 import com.tudominio.parentalcontrol.keystore.SecureStorage
+import com.tudominio.parentalcontrol.time.DefaultTimeProvider
+import com.tudominio.parentalcontrol.time.TimeProvider
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -309,6 +311,8 @@ class DeviceAuthManager private constructor(
     private var currentRefreshToken: String? = null
     private var sessionExpiresAt: Long = 0
 
+    private val timeProvider: TimeProvider = DefaultTimeProvider(context)
+
     private val sessionMutex = Mutex()
 
     init {
@@ -458,7 +462,7 @@ class DeviceAuthManager private constructor(
 
         currentAccessToken = response.access_token
         currentRefreshToken = response.refresh_token
-        sessionExpiresAt = response.expires_at ?: (System.currentTimeMillis() / 1000 + response.expires_in)
+                sessionExpiresAt = response.expires_at ?: (timeProvider.wallInstant().epochSecond + response.expires_in)
 
         val deviceId = response.user?.app_metadata?.get("device_id") ?: previousDeviceId
         _deviceId.value = deviceId
@@ -831,7 +835,7 @@ class DeviceAuthManager private constructor(
                         val refreshedDeviceId = authResponse.user?.app_metadata?.get("device_id") ?: deviceId
                         currentAccessToken = authResponse.access_token
                         currentRefreshToken = authResponse.refresh_token
-                        sessionExpiresAt = authResponse.expires_at ?: (System.currentTimeMillis() / 1000 + authResponse.expires_in)
+                        sessionExpiresAt = authResponse.expires_at ?: (timeProvider.wallInstant().epochSecond + authResponse.expires_in)
                         _deviceId.value = refreshedDeviceId
                         _sessionState.value = SessionState.PAIRED
                         persistSession(
@@ -869,7 +873,7 @@ class DeviceAuthManager private constructor(
     fun isPaired(): Boolean = _sessionState.value == SessionState.PAIRED
 
     fun isSessionExpiringSoon(): Boolean {
-        val fiveMinutesFromNow = System.currentTimeMillis() / 1000 + 300
+        val fiveMinutesFromNow = timeProvider.wallInstant().epochSecond + 300
         return sessionExpiresAt > 0 && sessionExpiresAt < fiveMinutesFromNow
     }
 
@@ -961,7 +965,7 @@ class DeviceAuthManager private constructor(
 
         // (a) Unexpired → return as today. The expiresAt==0 sentinel
         // covers the synthetic-anon path (no expiry persisted).
-        if (stored.expiresAt <= 0 || stored.expiresAt >= System.currentTimeMillis() / 1000) {
+        if (stored.expiresAt <= 0 || stored.expiresAt >= timeProvider.wallInstant().epochSecond) {
             return stored
         }
 
@@ -978,7 +982,7 @@ class DeviceAuthManager private constructor(
             refreshResult.fold(
                 onSuccess = { authResponse ->
                     val refreshedExpiresAt = authResponse.expires_at
-                        ?: (System.currentTimeMillis() / 1000 + authResponse.expires_in)
+                        ?: (timeProvider.wallInstant().epochSecond + authResponse.expires_in)
                     val refreshed = StoredSession(
                         accessToken = authResponse.access_token,
                         refreshToken = authResponse.refresh_token,
