@@ -1,5 +1,7 @@
 package com.tudominio.parentalcontrol.sync
 
+import com.tudominio.parentalcontrol.domain.DayOfWeek
+import com.tudominio.parentalcontrol.domain.ScheduleAction
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import org.junit.Assert.assertEquals
@@ -328,6 +330,21 @@ class SyncStatusTest {
 class PolicyPullResponseTest {
 
     @Test
+    fun `canonical policy fields decode with backwards compatible defaults`() {
+        val full = Json.decodeFromString<PolicyPullResponse>(
+            """{"version":8,"daily_screen_time_minutes":41,"schedules":[{"id":"sleep","days":["MON"],"from":"21:00","to":"07:00","action":"lock"}],"category_limits":[{"category":"games","minutes":13}]}""",
+        )
+        assertEquals(41, full.daily_screen_time_minutes)
+        assertEquals("sleep", full.schedules.single().id)
+        assertEquals(13, full.category_limits.single().minutes)
+
+        val legacy = Json.decodeFromString<PolicyPullResponse>("""{"version":7}""")
+        assertEquals(120, legacy.daily_screen_time_minutes)
+        assertTrue(legacy.schedules.isEmpty())
+        assertTrue(legacy.category_limits.isEmpty())
+    }
+
+    @Test
     fun `policy response can be parsed from JSON`() {
         val json = """
         {
@@ -400,6 +417,125 @@ class PolicyPullResponseTest {
 
         val response = Json.decodeFromString<PolicyPullResponse>(json)
         assertEquals("ACTIVE", response.device_state)
+    }
+
+    // ========================================================================
+    // F1 — wire DTO for `schedules` accepts BOTH deployed legacy and
+    // canonical enum tokens. The production get-policy RPC emits legacy
+    // uppercase `LOCK` / `ALLOW_ONLY` and full `MONDAY` day names; the
+    // canonical domain serializes to lowercase `lock` / `allow_only` and
+    // abbreviated `MON`. The DTO must bridge the two without weakening
+    // the canonical `domain.Policy` mappings.
+    // ========================================================================
+
+    @Test
+    fun `wire DTO decodes legacy uppercase action and full day names`() {
+        val legacy = Json.decodeFromString<PolicyPullResponse>(
+            """{"version":5,"schedules":[{"id":"sleep","days":["MONDAY","TUESDAY"],"from":"21:00","to":"07:00","action":"LOCK","allow_list":null},{"id":"homework","days":["WEDNESDAY"],"from":"16:00","to":"18:00","action":"ALLOW_ONLY","allow_list":["com.whatsapp"]}]}""",
+        )
+        assertEquals(2, legacy.schedules.size)
+        val first = legacy.schedules[0].toDomain()
+        val second = legacy.schedules[1].toDomain()
+        assertEquals(ScheduleAction.LOCK, first.action)
+        assertEquals(
+            listOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY),
+            first.days,
+        )
+        assertEquals(ScheduleAction.ALLOW_ONLY, second.action)
+        assertEquals(listOf("com.whatsapp"), second.allow_list)
+    }
+
+    @Test
+    fun `wire DTO decodes canonical lowercase action and abbreviated days`() {
+        val canonical = Json.decodeFromString<PolicyPullResponse>(
+            """{"version":5,"schedules":[{"id":"sleep","days":["MON"],"from":"21:00","to":"07:00","action":"lock"},{"id":"homework","days":["WED"],"from":"16:00","to":"18:00","action":"allow_only","allow_list":["com.whatsapp"]}]}""",
+        )
+        assertEquals(2, canonical.schedules.size)
+        val first = canonical.schedules[0].toDomain()
+        val second = canonical.schedules[1].toDomain()
+        assertEquals(ScheduleAction.LOCK, first.action)
+        assertEquals(listOf(DayOfWeek.MONDAY), first.days)
+        assertEquals(ScheduleAction.ALLOW_ONLY, second.action)
+    }
+
+    @Test
+    fun `wire DTO maps to canonical ScheduleEntity for storage`() {
+        val legacy = Json.decodeFromString<PolicyPullResponse>(
+            """{"version":5,"schedules":[{"id":"sleep","days":["MONDAY"],"from":"21:00","to":"07:00","action":"LOCK","allow_list":null}]}""",
+        )
+        val domain = legacy.schedules.single().toDomain()
+        assertEquals(
+            com.tudominio.parentalcontrol.data.model.ScheduleEntity(
+                id = "sleep",
+                days = listOf(DayOfWeek.MONDAY),
+                from = "21:00",
+                to = "07:00",
+                action = ScheduleAction.LOCK,
+                allow_list = null,
+            ),
+            domain,
+        )
+    }
+
+    @Test
+    fun `wire DTO rejects unknown action token`() {
+        val response = Json.decodeFromString<PolicyPullResponse>(
+            """{"version":5,"schedules":[{"id":"x","days":["MON"],"from":"21:00","to":"07:00","action":"BANANA"}]}""",
+        )
+        val ex = assertThrows(IllegalArgumentException::class.java) {
+            response.schedules.single().toDomain()
+        }
+        assertTrue(
+            "expected the action parser to reject the unknown token, got: ${ex.message}",
+            ex.message!!.contains("action", ignoreCase = true) ||
+                ex.message!!.contains("BANANA"),
+        )
+    }
+
+    @Test
+    fun `wire DTO rejects unknown day token`() {
+        val response = Json.decodeFromString<PolicyPullResponse>(
+            """{"version":5,"schedules":[{"id":"x","days":["FUNDAY"],"from":"21:00","to":"07:00","action":"lock"}]}""",
+        )
+        val ex = assertThrows(IllegalArgumentException::class.java) {
+            response.schedules.single().toDomain()
+        }
+        assertTrue(
+            "expected the day parser to reject the unknown token, got: ${ex.message}",
+            ex.message!!.contains("day", ignoreCase = true) ||
+                ex.message!!.contains("FUNDAY"),
+        )
+    }
+
+    @Test
+    fun `pullPolicy decode tolerates top level device_id from the real fixture`() {
+        // The Supabase `get_device_policy` RPC embeds `device_id` at the
+        // top level of the response. With the strict default Json
+        // config, that field would cause SerializationException and the
+        // whole pullPolicy cycle would silently fall back to Offline.
+        // The minimal targeted fix is a Json config with
+        // `ignoreUnknownKeys = true` for the decode — used only here,
+        // not globally. Verify the wire shape is otherwise intact.
+        val realFixture = """
+            {
+                "device_id": "550e8400-e29b-41d4-a716-446655440000",
+                "version": 9,
+                "device_state": "ACTIVE",
+                "daily_screen_time_minutes": 120,
+                "schedules": [
+                    {"id":"sleep","days":["MONDAY"],"from":"21:00","to":"07:00","action":"LOCK","allow_list":null}
+                ],
+                "category_limits": [],
+                "app_policies": []
+            }
+        """.trimIndent()
+
+        val response = decodePolicyPullResponse(realFixture)
+        assertEquals(9L, response.version)
+        assertEquals(1, response.schedules.size)
+        val mapped = response.schedules[0].toDomain()
+        assertEquals(ScheduleAction.LOCK, mapped.action)
+        assertEquals(listOf(DayOfWeek.MONDAY), mapped.days)
     }
 }
 

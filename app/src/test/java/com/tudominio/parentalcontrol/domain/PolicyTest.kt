@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import java.time.Instant
 
 class PolicyTest {
 
@@ -21,23 +22,23 @@ class PolicyTest {
         {
             "device_id": "550e8400-e29b-41d4-a716-446655440000",
             "version": 42,
-            "device_state": "ACTIVE",
+            "device_state": "active",
             "daily_screen_time_minutes": 120,
             "schedules": [
                 {
                     "id": "sched-1",
-                    "days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+                    "days": ["MON", "TUE", "WED", "THU", "FRI"],
                     "from": "08:00",
                     "to": "15:00",
-                    "action": "LOCK",
+                    "action": "lock",
                     "allow_list": null
                 },
                 {
                     "id": "sched-2",
-                    "days": ["SATURDAY", "SUNDAY"],
+                    "days": ["SAT", "SUN"],
                     "from": "10:00",
                     "to": "20:00",
-                    "action": "ALLOW_ONLY",
+                    "action": "allow_only",
                     "allow_list": ["com.whatsapp", "com.instagram"]
                 }
             ],
@@ -47,17 +48,24 @@ class PolicyTest {
             "app_policies": [
                 {
                     "package_name": "com.example.game",
-                    "state": "LIMITED",
+                    "state": "limited",
                     "daily_limit_minutes": 30,
                     "allowed_windows": [
-                        {"days": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"], "from": "16:00", "to": "18:00"},
-                        {"days": ["SATURDAY", "SUNDAY"], "from": "10:00", "to": "20:00"}
+                        {"days": ["MON", "TUE", "WED", "THU", "FRI"], "from": "16:00", "to": "18:00"},
+                        {"days": ["SAT", "SUN"], "from": "10:00", "to": "20:00"}
                     ],
                     "category": "games"
                 },
                 {
                     "package_name": "com.example.blocked",
-                    "state": "BLOCKED",
+                    "state": "blocked",
+                    "daily_limit_minutes": null,
+                    "allowed_windows": [],
+                    "category": null
+                },
+                {
+                    "package_name": "com.example.always_allowed",
+                    "state": "always_allowed",
                     "daily_limit_minutes": null,
                     "allowed_windows": [],
                     "category": null
@@ -72,7 +80,7 @@ class PolicyTest {
                     "request_id": "req-1",
                     "scope": "device",
                     "minutes": 30,
-                    "source": "EXTRA_TIME",
+                    "source": "extra_time",
                     "granted_at": "2026-06-13T10:00:00Z",
                     "expires_at": "2026-06-13T10:30:00Z"
                 }
@@ -85,13 +93,28 @@ class PolicyTest {
         assertEquals("550e8400-e29b-41d4-a716-446655440000", policy.device_id)
         assertEquals(42, policy.version)
         assertEquals(DeviceState.ACTIVE, policy.device_state)
+        assertEquals(ScheduleAction.LOCK, policy.schedules[0].action)
+        assertEquals(ScheduleAction.ALLOW_ONLY, policy.schedules[1].action)
+        assertEquals(
+            listOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY),
+            policy.schedules[0].days,
+        )
+        assertEquals(AppPolicyState.LIMITED, policy.app_policies[0].state)
+        assertEquals(AppPolicyState.BLOCKED, policy.app_policies[1].state)
+        assertEquals(AppPolicyState.ALWAYS_ALLOWED, policy.app_policies[2].state)
+        assertEquals(GrantSource.EXTRA_TIME, policy.grants[0].source)
         assertEquals(120, policy.daily_screen_time_minutes)
         assertEquals(2, policy.schedules.size)
         assertEquals(1, policy.category_limits.size)
-        assertEquals(2, policy.app_policies.size)
+        assertEquals(3, policy.app_policies.size)
         assertEquals(1, policy.grants.size)
 
         val reEncoded = json.encodeToString(policy)
+        assertTrue(reEncoded.contains("\"device_state\":\"active\""))
+        assertTrue(reEncoded.contains("\"state\":\"always_allowed\""))
+        assertTrue(reEncoded.contains("\"action\":\"allow_only\""))
+        assertTrue(reEncoded.contains("\"source\":\"extra_time\""))
+        assertTrue(reEncoded.contains("\"days\":[\"MON\""))
         val reDecoded = json.decodeFromString<Policy>(reEncoded)
 
         assertEquals(policy.device_id, reDecoded.device_id)
@@ -232,6 +255,18 @@ class PolicyTest {
     }
 
     @Test
+    fun `producer timestamp truncates sub-millisecond precision`() {
+        assertEquals(
+            "2026-06-13T10:00:00.123Z",
+            Instant.parse("2026-06-13T10:00:00.123456789Z").toCanonicalGrantTimestamp(),
+        )
+        assertEquals(
+            "2026-06-13T10:00:00.000Z",
+            Instant.parse("2026-06-13T10:00:00Z").toCanonicalGrantTimestamp(),
+        )
+    }
+
+    @Test
     fun `Window rejects invalid time format`() {
         try {
             Window(
@@ -270,15 +305,58 @@ class PolicyTest {
 
     @Test
     fun `Grant accepts LocalDateTime format timestamps`() {
+        try {
+            Grant(
+                id = "grant-1",
+                request_id = null,
+                scope = "device",
+                minutes = 30,
+                source = GrantSource.MANUAL,
+                granted_at = "2026-06-13T10:00:00",
+                expires_at = "2026-06-13T10:30:00"
+            )
+            fail("Expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message!!.contains("offset"))
+        }
+    }
+
+    @Test
+    fun `Grant accepts offsets and exposes canonical UTC milliseconds`() {
         val grant = Grant(
             id = "grant-1",
             request_id = null,
             scope = "device",
             minutes = 30,
             source = GrantSource.MANUAL,
-            granted_at = "2026-06-13T10:00:00",
-            expires_at = "2026-06-13T10:30:00"
+            granted_at = "2026-06-13T12:00:00+02:00",
+            expires_at = "2026-06-13T12:30:00.12+02:00"
         )
-        assertEquals("grant-1", grant.id)
+
+        assertEquals("2026-06-13T10:00:00.000Z", grant.canonicalGrantedAt())
+        assertEquals("2026-06-13T10:30:00.120Z", grant.canonicalExpiresAt())
+    }
+
+    @Test
+    fun `Grant rejects sub-millisecond and malformed timestamps`() {
+        listOf(
+            "2026-06-13T10:00:00.0001Z",
+            "not-a-timestamp"
+        ).forEach { timestamp ->
+            try {
+                Grant(
+                    id = "grant-1",
+                    request_id = null,
+                    scope = "device",
+                    minutes = 30,
+                    source = GrantSource.MANUAL,
+                    granted_at = timestamp,
+                    expires_at = "2026-06-13T10:30:00Z"
+                )
+                fail("Expected IllegalArgumentException for $timestamp")
+            } catch (e: IllegalArgumentException) {
+                assertTrue(e.message!!.contains("granted_at"))
+            }
+        }
     }
 }

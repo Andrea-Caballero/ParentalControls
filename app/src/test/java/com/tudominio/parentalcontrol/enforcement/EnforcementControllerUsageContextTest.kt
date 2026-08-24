@@ -19,6 +19,7 @@ import com.tudominio.parentalcontrol.domain.evaluar
 import com.tudominio.parentalcontrol.time.FakeTimeProvider
 import io.mockk.every
 import io.mockk.mockk
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -34,7 +35,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
@@ -182,6 +185,57 @@ class EnforcementControllerUsageContextTest {
     }
 
     @Test
+    fun `production default advances usage date at trusted local midnight`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val timeProvider = FakeTimeProvider(fakeZone = ZoneId.of("UTC"))
+        timeProvider.confirmTrustedTime(Instant.parse("2026-07-30T23:59:59Z"))
+        val calls = mutableListOf<Pair<String, String>>()
+        val controller = controller(
+            flowProvider = { id, date ->
+                calls += id to date
+                flowOf(UsageContext.empty())
+            },
+            timeProvider = timeProvider,
+            useProductionDateFlow = true,
+        )
+        runCurrent()
+        assertEquals(listOf(DEVICE to "2026-07-30"), calls)
+
+        timeProvider.advanceTime(1_000L)
+        advanceTimeBy(1_000L)
+        runCurrent()
+
+        assertEquals(
+            listOf(DEVICE to "2026-07-30", DEVICE to "2026-07-31"),
+            calls,
+        )
+        controller.closeForTest()
+    }
+
+    @Test
+    fun `production default waits for trusted time and recovers when it becomes available`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val timeProvider = FakeTimeProvider(fakeZone = ZoneId.of("UTC"))
+        val calls = mutableListOf<Pair<String, String>>()
+        val controller = controller(
+            flowProvider = { id, date ->
+                calls += id to date
+                flowOf(UsageContext.empty())
+            },
+            timeProvider = timeProvider,
+            useProductionDateFlow = true,
+        )
+        runCurrent()
+        assertTrue(calls.isEmpty())
+
+        timeProvider.confirmTrustedTime(Instant.parse("2026-07-30T12:00:00Z"))
+        runCurrent()
+
+        assertEquals(listOf(DEVICE to "2026-07-30"), calls)
+        controller.closeForTest()
+    }
+
+    @Test
     fun `identity change does not synchronously clear usage cache before new provider emits`() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val identity = MutableStateFlow<String?>("device-one")
@@ -207,6 +261,10 @@ class EnforcementControllerUsageContextTest {
     private fun controller(
         identity: MutableStateFlow<String?> = MutableStateFlow(DEVICE),
         dateFlow: () -> Flow<String> = { MutableStateFlow(LocalDate.of(2026, 7, 30).toString()) },
+        timeProvider: FakeTimeProvider = FakeTimeProvider(fakeServerDate = LocalDate.of(2026, 7, 30)).also {
+            it.confirmTrustedTime(Instant.parse("2026-07-30T12:00:00Z"))
+        },
+        useProductionDateFlow: Boolean = false,
         flowProvider: (String, String) -> Flow<UsageContext>,
     ): EnforcementController {
         val auth = mockk<DeviceAuthManager>(relaxed = true)
@@ -221,18 +279,30 @@ class EnforcementControllerUsageContextTest {
         every { policyDao.getPolicyFlow(any()) } returns emptyFlow()
         every { appPolicyDao.getAppPoliciesForDeviceFlow(any()) } returns emptyFlow()
         every { grantDao.getActiveGrantsFlow(any(), any()) } returns emptyFlow()
-        val timeProvider = FakeTimeProvider(fakeServerDate = LocalDate.of(2026, 7, 30))
-        timeProvider.confirmTrustedTime(java.time.Instant.parse("2026-07-30T12:00:00Z"))
-        return EnforcementController(
-            context = context,
-            database = database,
-            timeProvider = timeProvider,
-            authManager = auth,
-            lockManager = mockk<LockManager>(relaxed = true),
-            usageContextFlowProvider = flowProvider,
-            usageDateFlowProvider = dateFlow,
-            controllerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-        )
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val lockManager = mockk<LockManager>(relaxed = true)
+        return if (useProductionDateFlow) {
+            EnforcementController(
+                context = context,
+                database = database,
+                timeProvider = timeProvider,
+                authManager = auth,
+                lockManager = lockManager,
+                usageContextFlowProvider = flowProvider,
+                controllerScope = scope,
+            )
+        } else {
+            EnforcementController(
+                context = context,
+                database = database,
+                timeProvider = timeProvider,
+                authManager = auth,
+                lockManager = lockManager,
+                usageContextFlowProvider = flowProvider,
+                usageDateFlowProvider = dateFlow,
+                controllerScope = scope,
+            )
+        }
     }
 
     private fun policy(

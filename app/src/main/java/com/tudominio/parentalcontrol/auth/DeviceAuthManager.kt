@@ -7,6 +7,7 @@ import android.util.Base64
 import android.util.Log
 import com.tudominio.parentalcontrol.BuildConfig
 import com.tudominio.parentalcontrol.data.remote.MockSupabaseEngine
+import com.tudominio.parentalcontrol.security.network.NetworkSecurityConfig
 import com.tudominio.parentalcontrol.keystore.SecureStorage
 import com.tudominio.parentalcontrol.time.DefaultTimeProvider
 import com.tudominio.parentalcontrol.time.TimeProvider
@@ -26,6 +27,7 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +41,7 @@ import kotlinx.serialization.json.Json
 import java.security.InvalidKeyException
 import java.security.KeyStore
 import javax.crypto.Cipher
+import javax.crypto.AEADBadTagException
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
@@ -52,6 +55,10 @@ sealed class AuthResult {
     ) : AuthResult()
 
     data class NeedsPairing(
+        val message: String
+    ) : AuthResult()
+
+    data class Retryable(
         val message: String
     ) : AuthResult()
 
@@ -77,6 +84,21 @@ data class StoredSession(
     val userId: String
 )
 
+internal sealed interface SessionRestoreOutcome {
+    data object NoPersistedSession : SessionRestoreOutcome
+    data class Restored(val session: StoredSession) : SessionRestoreOutcome
+    data object TransientFailure : SessionRestoreOutcome
+    data object InvalidSession : SessionRestoreOutcome
+}
+
+private class RefreshFailure(val statusCode: Int?) : IllegalStateException()
+
+private fun Throwable.isMalformedAuthStorageFailure(): Boolean =
+    this is IllegalArgumentException ||
+        this is IndexOutOfBoundsException ||
+        this is AEADBadTagException ||
+        this is kotlinx.serialization.SerializationException
+
 @Serializable
 data class SupabaseAuthResponse(
     val access_token: String,
@@ -86,74 +108,6 @@ data class SupabaseAuthResponse(
     val user: SupabaseUser? = null
 )
 
-/**
- * Magic-link sign-in result (intermediate — no JWT yet).
- *
- * Returned by [DeviceAuthManager.signInWithMagicLink] when Supabase
- * accepted the email and dispatched the magic link. The message id is
- * the opaque Supabase identifier for the dispatched email; the user
- * must click the link in their inbox, then
- * [DeviceAuthManager.verifyMagicLinkOtp] exchanges the resulting token
- * for a real ParentSession.
- */
-data class MagicLinkSent(
-    val messageId: String
-)
-
-/**
- * Authenticated parent session (Slice A — `signInWithMagicLink` flow).
- *
- * `parentId` is the Supabase `auth.users.id` (mirrors `app_metadata.parent_id`
- * — the same UUID the custom-access-token-hook injects as a JWT claim).
- *
- * The `accessToken` is the JWT to use as `Authorization: Bearer <token>`
- * on every parent-scoped Supabase REST/edge-fn call.
- */
-data class ParentSession(
-    val parentId: String,
-    val accessToken: String,
-    val refreshToken: String
-)
-
-/**
- * On-disk serialization shape for [ParentSession] inside the
- * `encrypted_parent_session` blob. Kept as a separate `@Serializable`
- * data class so the JSON envelope is independent of the public
- * `ParentSession` data class — the on-disk shape can add debug fields
- * (created-at, schema version) without touching the public API.
- *
- * Mirrors [StoredSession] for the child anonymous-auth path at
- * `DeviceAuthManager.kt:69-76`. Both shapes serialize to JSON, get
- * encrypted via [encryptWithKeystore], and land as a single blob in
- * `device_auth_prefs`.
- */
-@Serializable
-data class ParentSessionSerializer(
-    val parentId: String,
-    val accessToken: String,
-    val refreshToken: String
-)
-
-/**
- * Errors surfaced by [DeviceAuthManager.signInWithMagicLink] +
- * [DeviceAuthManager.verifyMagicLinkOtp]. Distinct error type from
- * [AuthResult.Error] so callers can branch on the failure mode without
- * parsing message strings.
- */
-sealed class ParentAuthError(message: String) : RuntimeException(message) {
-    /** Supabase returned 400 with `error: "invalid_email"` */
-    object InvalidEmail : ParentAuthError("invalid_email")
-
-    /** Supabase returned 401 with `error: "otp_expired"` (verify only) */
-    object TokenExpired : ParentAuthError("token_expired")
-
-    /** Supabase returned 422 or any other 4xx (caller surfaces to UI) */
-    object InvalidRequest : ParentAuthError("invalid_request")
-
-    /** Network / decoding / unknown server failure */
-    object Unknown : ParentAuthError("unknown")
-}
-
 @Serializable
 data class SupabaseUser(
     val id: String,
@@ -162,27 +116,30 @@ data class SupabaseUser(
     val user_metadata: Map<String, String>? = null
 )
 
-@Serializable
-data class MagicLinkRequest(
-    val email: String,
-    val create_user: Boolean = true,
-    val gotrue_meta_security: Map<String, String> = mapOf("captcha_token" to "")
-)
+internal enum class DeviceAuthEngine {
+    SHARED_MOCK,
+    IN_PROCESS_MOCK,
+    REAL
+}
 
-@Serializable
-data class MagicLinkResponse(
-    val message_id: String? = null,
-    val error: String? = null
-)
+internal fun selectDeviceAuthEngine(
+    useSharedMock: Boolean,
+    useMockSupabase: Boolean
+): DeviceAuthEngine = when {
+    useSharedMock -> DeviceAuthEngine.SHARED_MOCK
+    useMockSupabase -> DeviceAuthEngine.IN_PROCESS_MOCK
+    else -> DeviceAuthEngine.REAL
+}
 
-@Serializable
-data class MagicLinkVerifyRequest(
-    val email: String,
-    val token: String
-)
-
-@Serializable
-data class DevLoginRequest(val email: String)
+internal fun effectiveDeviceAuthUrl(
+    useSharedMock: Boolean,
+    supabaseUrl: String,
+    sharedMockUrl: String,
+    path: String
+): String {
+    val baseUrl = if (useSharedMock) sharedMockUrl else supabaseUrl
+    return "${baseUrl.trimEnd('/')}/${path.trimStart('/')}"
+}
 
 class DeviceAuthManager private constructor(
     private val context: Context
@@ -207,14 +164,6 @@ class DeviceAuthManager private constructor(
             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
         )
 
-        // Slice A — pragmatic email format check used by
-        // `isValidEmail` (called from `signInWithMagicLink`). Lives in
-        // the companion so the regex is compiled once at class load,
-        // not per-call.
-        private val EMAIL_REGEX = Regex(
-            "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$"
-        )
-
         @Volatile
         private var instance: DeviceAuthManager? = null
 
@@ -231,9 +180,9 @@ class DeviceAuthManager private constructor(
          *
          * Robolectric 4.10.3 cannot instantiate `AndroidKeyStore`, and
          * the production cipher requires it. The
-         * `DeviceAuthManagerParentSessionCipherTest` tests use this
-         * seam so the production `init { loadPersistedState }`
-         * decrypt path can run end-to-end inside the JVM unit test.
+         * JVM auth persistence tests use this seam so the production
+         * `init { loadPersistedState }` decrypt path can run without
+         * Android Keystore.
          *
          * Marked `@JvmStatic` for Java reflection access from the JVM
          * unit-test source set (`TestableAuthCipher` is also
@@ -279,18 +228,36 @@ class DeviceAuthManager private constructor(
         isLenient = true
     }
 
-    private val httpClient: HttpClient = if (BuildConfig.USE_MOCK_SUPABASE) {
-        // Per `fix-supabase-client-provider-legacy-mock-gate` family: every
-        // legacy `getInstance` path in the project must honor the same flag
-        // the Hilt `@SupabaseClient` binding honors in `NetworkModule`.
-        // `DeviceAuthManager` has its own private `httpClient` (used by
-        // `createAnonymousSession` and `completePairing`); without this
-        // branch the auth call hits the placeholder Supabase URL and
-        // surfaces as `NETWORK_ERROR` in `PairingManager` before the
-        // pairing call can use the (already-mock'd) `SupabaseClientProvider`.
-        MockSupabaseEngine(context).httpClient
-    } else {
-        HttpClient(OkHttp) {
+    private val httpClient: HttpClient = when (
+        selectDeviceAuthEngine(
+            useSharedMock = BuildConfig.USE_SHARED_MOCK,
+            useMockSupabase = BuildConfig.USE_MOCK_SUPABASE
+        )
+    ) {
+        DeviceAuthEngine.SHARED_MOCK -> HttpClient(OkHttp) {
+            install(ContentNegotiation) {
+                json(json)
+            }
+            install(HttpTimeout) {
+                requestTimeoutMillis = 30000
+                connectTimeoutMillis = 15000
+            }
+        }
+        DeviceAuthEngine.IN_PROCESS_MOCK -> {
+            // Per `fix-supabase-client-provider-legacy-mock-gate` family: every
+            // legacy `getInstance` path in the project must honor the same flag
+            // the Hilt `@SupabaseClient` binding honors in `NetworkModule`.
+            // `DeviceAuthManager` has its own private `httpClient` (used by
+            // `createAnonymousSession` and `completePairing`); without this
+            // branch the auth call hits the placeholder Supabase URL and
+            // surfaces as `NETWORK_ERROR` in `PairingManager` before the
+            // pairing call can use the (already-mock'd) `SupabaseClientProvider`.
+            MockSupabaseEngine(context).httpClient
+        }
+        DeviceAuthEngine.REAL -> HttpClient(OkHttp) {
+            engine {
+                preconfigured = NetworkSecurityConfig.createSecureOkHttpClient(context)
+            }
             install(ContentNegotiation) {
                 json(json)
             }
@@ -300,6 +267,13 @@ class DeviceAuthManager private constructor(
             }
         }
     }
+
+    private fun requestUrl(path: String): String = effectiveDeviceAuthUrl(
+        useSharedMock = BuildConfig.USE_SHARED_MOCK,
+        supabaseUrl = SUPABASE_URL,
+        sharedMockUrl = BuildConfig.SHARED_MOCK_URL,
+        path = path
+    )
 
     private val _sessionState = MutableStateFlow(SessionState.NONE)
     val sessionState: StateFlow<SessionState> = _sessionState.asStateFlow()
@@ -328,24 +302,41 @@ class DeviceAuthManager private constructor(
 
     suspend fun authenticateOrCreate(): AuthResult = sessionMutex.withLock {
         withContext(Dispatchers.IO) {
-            val restoredSession = restoreSession()
-            if (restoredSession != null) {
-                currentAccessToken = restoredSession.accessToken
-                currentRefreshToken = restoredSession.refreshToken
-                sessionExpiresAt = restoredSession.expiresAt
-                _deviceId.value = restoredSession.deviceId
-                _sessionState.value =
-                    if (restoredSession.deviceId != null) SessionState.PAIRED else SessionState.ANONYMOUS
+            when (val outcome = restoreSessionOutcome()) {
+                is SessionRestoreOutcome.Restored -> {
+                    val restoredSession = outcome.session
+                    currentAccessToken = restoredSession.accessToken
+                    currentRefreshToken = restoredSession.refreshToken
+                    sessionExpiresAt = restoredSession.expiresAt
+                    _deviceId.value = restoredSession.deviceId
+                    _sessionState.value =
+                        if (restoredSession.deviceId != null) SessionState.PAIRED else SessionState.ANONYMOUS
 
-                return@withContext AuthResult.Success(
-                    deviceId = restoredSession.deviceId ?: "anonymous",
-                    accessToken = restoredSession.accessToken,
-                    refreshToken = restoredSession.refreshToken,
-                    expiresAt = restoredSession.expiresAt
-                )
+                    return@withContext AuthResult.Success(
+                        deviceId = restoredSession.deviceId ?: "anonymous",
+                        accessToken = restoredSession.accessToken,
+                        refreshToken = restoredSession.refreshToken,
+                        expiresAt = restoredSession.expiresAt
+                    )
+                }
+                SessionRestoreOutcome.NoPersistedSession -> return@withContext createAnonymousSession()
+                SessionRestoreOutcome.TransientFailure -> {
+                    _sessionState.value = SessionState.EXPIRED
+                    Log.w(TAG, "auth_session_reauthentication_unavailable")
+                    return@withContext AuthResult.Retryable("La sesión requiere autenticación")
+                }
+                SessionRestoreOutcome.InvalidSession -> {
+                    currentAccessToken = null
+                    currentRefreshToken = null
+                    sessionExpiresAt = 0
+                    _deviceId.value = null
+                    _sessionState.value = SessionState.INVALID
+                    context.getSharedPreferences("device_auth_prefs", Context.MODE_PRIVATE)
+                        .edit().clear().apply()
+                    Log.w(TAG, "auth_session_reauthentication_required")
+                    return@withContext AuthResult.NeedsPairing("La sesión requiere autenticación")
+                }
             }
-
-            return@withContext createAnonymousSession()
         }
     }
 
@@ -354,8 +345,8 @@ class DeviceAuthManager private constructor(
      *
      * Issues a local JWT-shaped token of the form `anon-${role}-${uuid}` and
      * persists the [role] in `device_auth_prefs` so [getRole] can return it
-     * after a process restart. This is the hotfix path described in design
-     * §D4 of `openspec/changes/hotfix-parent-auth-session/design.md`: it
+     * after a process restart. This is the local synthetic-auth compatibility
+     * path: it
      * does NOT call Supabase, so it works even when `SUPABASE_URL` is a
      * placeholder (the current `local.properties` state).
      *
@@ -439,7 +430,7 @@ class DeviceAuthManager private constructor(
             // grant is a synthetic shadow that cannot be later correlated
             // with the agent-side `user.id` that the production pairing
             // edge function validates against.
-            val response = httpClient.post("$SUPABASE_URL/auth/v1/signup") {
+            val response = httpClient.post(requestUrl("/auth/v1/signup")) {
                 header("apikey", SUPABASE_ANON_KEY)
                 contentType(ContentType.Application.Json)
                 setBody("{}")
@@ -488,7 +479,7 @@ class DeviceAuthManager private constructor(
 
     suspend fun completePairing(pairingCode: String): AuthResult = withContext(Dispatchers.IO) {
         try {
-            val response = httpClient.post("$SUPABASE_URL/functions/v1/pairing") {
+            val response = httpClient.post(requestUrl("/functions/v1/pairing")) {
                 header("Authorization", "Bearer $currentAccessToken")
                 header("Content-Type", "application/json")
                 setBody(json.encodeToString(mapOf("code" to pairingCode)))
@@ -542,9 +533,10 @@ class DeviceAuthManager private constructor(
         val result = performTokenRefresh(refreshToken)
         return@withContext result.fold(
             onSuccess = { authResponse -> handleAuthSuccess(authResponse) },
-            onFailure = { e ->
+            onFailure = { _ ->
                 _sessionState.value = SessionState.INVALID
-                AuthResult.NeedsPairing("Error refreshing: ${e.message}")
+                Log.w(TAG, "auth_session_refresh_failed")
+                AuthResult.NeedsPairing("La sesión requiere autenticación")
             }
         )
     }
@@ -561,228 +553,24 @@ class DeviceAuthManager private constructor(
         refreshToken: String
     ): Result<SupabaseAuthResponse> = withContext(Dispatchers.IO) {
         try {
-            val response = httpClient.post("$SUPABASE_URL/auth/v1/token?grant_type=refresh_token") {
+            val response = httpClient.post(requestUrl("/auth/v1/token?grant_type=refresh_token")) {
                 header("apikey", SUPABASE_ANON_KEY)
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(mapOf("refresh_token" to refreshToken)))
             }
 
             if (!response.status.isSuccess()) {
-                return@withContext Result.failure(
-                    IllegalStateException("HTTP ${response.status.value}")
-                )
+                return@withContext Result.failure(RefreshFailure(response.status.value))
             }
 
             val authResponse: SupabaseAuthResponse = response.body()
             Result.success(authResponse)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
-
-    /**
-     * Slice A — `signInWithMagicLink(email)` (Q1=b magic-link path).
-     *
-     * Posts `${SUPABASE_URL}/auth/v1/magiclink` with `{ email,
-     * create_user: true, gotrue_meta_security: { captcha_token: "" } }`
-     * so Supabase dispatches the magic link to the parent's inbox.
-     *
-     * The Inbucket at `http://127.0.0.1:54324` (local Supabase) catches
-     * the email; the production build routes to the real inbox.
-     *
-     * Returns [Result.success] with a [MagicLinkSent] carrying the
-     * Supabase-assigned `message_id` (opaque). Returns
-     * [Result.failure] with a [ParentAuthError] for HTTP errors; the
-     * `device_auth_prefs` namespace is NEVER touched on the failure
-     * path.
-     *
-     * Called only under `!BuildConfig.USE_MOCK_SUPABASE` (real cloud
-     * path); the mock engine never receives this call.
-     */
-    suspend fun signInWithMagicLink(email: String): Result<MagicLinkSent> =
-        withContext(Dispatchers.IO) {
-            if (!isValidEmail(email)) {
-                return@withContext Result.failure(ParentAuthError.InvalidEmail)
-            }
-            try {
-                val response = httpClient.post("$SUPABASE_URL/auth/v1/magiclink") {
-                    header("apikey", SUPABASE_ANON_KEY)
-                    contentType(ContentType.Application.Json)
-                    setBody(MagicLinkRequest(email = email))
-                }
-                if (!response.status.isSuccess()) {
-                    val code = response.status.value
-                    return@withContext Result.failure(
-                        when (code) {
-                            400 -> ParentAuthError.InvalidEmail
-                            422 -> ParentAuthError.InvalidRequest
-                            else -> ParentAuthError.Unknown
-                        }
-                    )
-                }
-                // Supabase returns `{}` on success in some versions OR
-                // `{ message_id: "<uuid>" }` in others. Parse whichever
-                // shape is present; empty object is acceptable.
-                val parsed: MagicLinkResponse = response.body()
-                Result.success(MagicLinkSent(messageId = parsed.message_id.orEmpty()))
-            } catch (e: Exception) {
-                Log.w(TAG, "signInWithMagicLink failed: ${e.message}", e)
-                Result.failure(ParentAuthError.Unknown)
-            }
-        }
-
-    /**
-     * Slice A — `verifyMagicLinkOtp(tokenHash, email)` (Q1=b magic-link path).
-     *
-     * Exchanges the magic-link `token_hash` (extracted from the link URL
-     * by the UI / smoke-test harness) for a real parent session by
-     * POSTing `${SUPABASE_URL}/auth/v1/verify?type=magiclink` with
-     * `{ email, token: tokenHash }`. The Supabase response includes the
-     * `access_token` JWT (whose `parent_id` claim was injected by the
-     * custom-access-token-hook from `app_metadata.parent_id`) and a
-     * `user.id` (= parentId).
-     *
-     * On success:
-     *  - Returns [ParentSession] with `parentId` = `user.id`.
-     *  - Atomically persists `{ role: PARENT, parent_id, access_token }`
-     *    to `device_auth_prefs` via [persistParentSession]. The atomic
-     *    helper writes all keys inside a single `prefs.edit().apply()`
-     *    so a crash mid-write cannot leave half-state.
-     *
-     * On failure:
-     *  - [ParentAuthError.TokenExpired] for HTTP 401.
-     *  - [ParentAuthError.InvalidRequest] for HTTP 422.
-     *  - [ParentAuthError.Unknown] for any other 4xx/5xx or network error.
-     *  - `device_auth_prefs` is NEVER touched (atomic-prefs invariant).
-     *
-     * Called only under `!BuildConfig.USE_MOCK_SUPABASE`.
-     */
-    suspend fun verifyMagicLinkOtp(
-        tokenHash: String,
-        email: String
-    ): Result<ParentSession> = withContext(Dispatchers.IO) {
-        try {
-            val response = httpClient.post("$SUPABASE_URL/auth/v1/verify?type=magiclink") {
-                header("apikey", SUPABASE_ANON_KEY)
-                contentType(ContentType.Application.Json)
-                setBody(MagicLinkVerifyRequest(email = email, token = tokenHash))
-            }
-            if (!response.status.isSuccess()) {
-                val code = response.status.value
-                return@withContext Result.failure(
-                    when (code) {
-                        401 -> ParentAuthError.TokenExpired
-                        422 -> ParentAuthError.InvalidRequest
-                        else -> ParentAuthError.Unknown
-                    }
-                )
-            }
-            val authResponse: SupabaseAuthResponse = response.body()
-            val parentId = authResponse.user?.id
-                ?: return@withContext Result.failure(ParentAuthError.InvalidRequest)
-
-            val session = ParentSession(
-                parentId = parentId,
-                accessToken = authResponse.access_token,
-                refreshToken = authResponse.refresh_token
-            )
-
-            // Atomic persistence: all keys in a single edit() block so a
-            // crash mid-write cannot leave half-state. The cleartext
-            // `parent_id` + `role` keys are written alongside the new
-            // `access_token` + `refresh_token` cleartext siblings (the
-            // Keystore-encrypted `encrypted_session` path is kept for
-            // the synthetic-anonymous child auth flow; the parent magic-
-            // link path uses cleartext so the cold-start read in
-            // `loadPersistedState` is symmetric with the synthetic
-            // restoreSession flow).
-            persistParentSession(session)
-
-            Result.success(session)
-        } catch (e: Exception) {
-            Log.w(TAG, "verifyMagicLinkOtp failed: ${e.message}", e)
-            Result.failure(ParentAuthError.Unknown)
-        }
-    }
-
-    /**
-     * Atomic write of a [ParentSession] to `device_auth_prefs`. Single
-     * `prefs.edit().apply()` block; on any exception, no key is written
-     * and the existing prefs are preserved (the atomic-prefs invariant
-     * pinned by the A.1.3 test).
-     *
-     * WARNING-1 (W1) closure: writes the sensitive JWT tokens
-     * (`accessToken`, `refreshToken`) as a single encrypted blob
-     * (`encrypted_parent_session`) instead of cleartext alongside
-     * `role` + `parent_id`. Mirrors the
-     * [persistSession]/[encryptWithKeystore] pair used by the
-     * child anonymous-auth flow at this file's `persistSession` +
-     * `encryptWithKeystore` lines (the line numbers shift as the file
-     * evolves, but the seam is the same).
-     *
-     * `role` and `parent_id` stay cleartext — `parent_id` is a UUID
-     * (not sensitive) and [getParentId] + the clean-cutover wipe in
-     * [loadPersistedState] both read it to detect stale state. The
-     * atomically-protected cleartext is intentionally small: just a
-     * role flag and a UUID, neither of which exposes the JWT.
-     */
-    private fun persistParentSession(session: ParentSession) {
-        val parentJson = json.encodeToString(
-            ParentSessionSerializer(
-                parentId = session.parentId,
-                accessToken = session.accessToken,
-                refreshToken = session.refreshToken
-            )
-        )
-        val encrypted = encryptWithKeystore(parentJson)
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString("role", Role.PARENT.name)
-            .putString("parent_id", session.parentId)
-            .putString("encrypted_parent_session", encrypted)
-            .apply()
-    }
-
-    // Slice B1 — shared-mock dev-login bypass. Gated on `USE_SHARED_MOCK`;
-    // uses `SHARED_MOCK_URL` so the request reaches `localhost:8787`.
-    // Production path unchanged: when `USE_SHARED_MOCK=false` the VM never calls this.
-    suspend fun devLogin(email: String): Result<ParentSession> =
-        withContext(Dispatchers.IO) {
-            if (!isValidEmail(email)) {
-                return@withContext Result.failure(ParentAuthError.InvalidEmail)
-            }
-            val baseUrl = if (BuildConfig.USE_SHARED_MOCK) BuildConfig.SHARED_MOCK_URL else SUPABASE_URL
-            try {
-                val response = httpClient.post("$baseUrl/auth/v1/dev-login") {
-                    header("apikey", SUPABASE_ANON_KEY)
-                    contentType(ContentType.Application.Json)
-                    setBody(DevLoginRequest(email = email))
-                }
-                if (!response.status.isSuccess()) {
-                    return@withContext Result.failure(ParentAuthError.Unknown)
-                }
-                val authResponse: SupabaseAuthResponse = response.body()
-                val parentId = authResponse.user?.id
-                    ?: return@withContext Result.failure(ParentAuthError.InvalidRequest)
-                val session = ParentSession(
-                    parentId = parentId,
-                    accessToken = authResponse.access_token,
-                    refreshToken = authResponse.refresh_token
-                )
-                persistParentSession(session)
-                // Slice B1 — fix-1: hydrate the in-memory tokens so the
-                // dashboard's loadDevices() works without a force-stop.
-                // Mirrors `completePairing` (sets _sessionState=PAIRED).
-                _sessionState.value = SessionState.PAIRED
-                currentAccessToken = session.accessToken
-                currentRefreshToken = session.refreshToken
-                sessionExpiresAt = 0
-                Result.success(session)
-            } catch (e: Exception) {
-                Log.w(TAG, "devLogin failed: ${e.message}", e)
-                Result.failure(ParentAuthError.Unknown)
-            }
-        }
 
     suspend fun forceReauth(): AuthResult = withContext(Dispatchers.IO) {
         clearSession()
@@ -849,7 +637,7 @@ class DeviceAuthManager private constructor(
                         )
                     },
                     onFailure = { e ->
-                        Log.w(TAG, "Post-pairing JWT refresh failed: ${e.message}")
+                        Log.w(TAG, "auth_post_pairing_refresh_failed")
                     }
                 )
             }
@@ -903,7 +691,7 @@ class DeviceAuthManager private constructor(
                 IllegalStateException("No access token")
             )
 
-            val response = httpClient.request("$SUPABASE_URL$path") {
+            val response = httpClient.request(requestUrl(path)) {
                 this.method = method
                 header("Authorization", "Bearer $token")
                 header("apikey", SUPABASE_ANON_KEY)
@@ -936,11 +724,10 @@ class DeviceAuthManager private constructor(
      *    `performTokenRefresh(...)` and, on HTTP 2xx, persist the
      *    refreshed [StoredSession] via [persistSession] (same
      *    `masterKeyAlias` via the production path) and return it.
-     *  - **(c)** Expired + empty `refresh_token` (defensive — should
-     *    not happen for anon sessions) → return `null`.
-     *  - **(d)** Refresh HTTP failure (401/4xx/5xx/network) → log
-     *    `Log.w(TAG, "Refresh failed: …")` and return `null`. The
-     *    on-disk blob is NOT rewritten (pre-fix behavior preserved).
+     *  - **(c)** Expired + empty `refresh_token` or corrupt ciphertext →
+     *    invalid session; unsafe state is cleared by the caller.
+     *  - **(d)** Refresh HTTP 401/403 → invalid session; network/5xx →
+     *    transient failure and the encrypted credentials remain intact.
      *
      * # Dispatch
      * HTTP work runs on `Dispatchers.IO` via [performTokenRefresh]. The
@@ -952,34 +739,45 @@ class DeviceAuthManager private constructor(
      * The unexpired path still returns synchronously without touching
      * the network.
      */
-    internal fun restoreSession(): StoredSession? {
-        val encrypted = context.getSharedPreferences("device_auth_prefs", Context.MODE_PRIVATE)
-            .getString("encrypted_session", null) ?: return null
+     internal fun restoreSession(): StoredSession? {
+         return (restoreSessionOutcome() as? SessionRestoreOutcome.Restored)?.session
+     }
 
-        val stored = try {
-            val jsonString = decryptWithKeystore(encrypted)
-            json.decodeFromString<StoredSession>(jsonString)
-        } catch (e: Exception) {
-            return null
-        }
+     internal fun restoreSessionOutcome(): SessionRestoreOutcome {
+         val encrypted = context.getSharedPreferences("device_auth_prefs", Context.MODE_PRIVATE)
+             .getString("encrypted_session", null) ?: return SessionRestoreOutcome.NoPersistedSession
+
+         val stored = try {
+             val jsonString = decryptWithKeystore(encrypted)
+             json.decodeFromString<StoredSession>(jsonString)
+         } catch (e: Exception) {
+             return if (e.isMalformedAuthStorageFailure()) {
+                 Log.w(TAG, "auth_session_invalid")
+                 SessionRestoreOutcome.InvalidSession
+             } else {
+                 Log.w(TAG, "auth_session_reauthentication_unavailable")
+                 SessionRestoreOutcome.TransientFailure
+             }
+         }
 
         // (a) Unexpired → return as today. The expiresAt==0 sentinel
         // covers the synthetic-anon path (no expiry persisted).
-        if (stored.expiresAt <= 0 || stored.expiresAt >= timeProvider.wallInstant().epochSecond) {
-            return stored
+         if (stored.expiresAt <= 0 || stored.expiresAt >= timeProvider.wallInstant().epochSecond) {
+             return SessionRestoreOutcome.Restored(stored)
         }
 
         // (c) Expired but no refresh_token → return null (defensive).
-        if (stored.refreshToken.isBlank()) {
-            return null
+         if (stored.refreshToken.isBlank()) {
+             Log.w(TAG, "auth_session_invalid")
+             return SessionRestoreOutcome.InvalidSession
         }
 
         // (b) Expired + refresh_token → refresh round-trip via the
         // shared helper (Dispatchers.IO inside). runBlocking bridges the
         // non-suspend signature to the suspend HTTP call.
-        return runBlocking {
-            val refreshResult = performTokenRefresh(stored.refreshToken)
-            refreshResult.fold(
+         return runBlocking {
+             val refreshResult = performTokenRefresh(stored.refreshToken)
+             refreshResult.fold(
                 onSuccess = { authResponse ->
                     val refreshedExpiresAt = authResponse.expires_at
                         ?: (timeProvider.wallInstant().epochSecond + authResponse.expires_in)
@@ -994,16 +792,19 @@ class DeviceAuthManager private constructor(
                         userId = authResponse.user?.id ?: stored.userId
                     )
                     persistSession(refreshed)
-                    refreshed
+                     SessionRestoreOutcome.Restored(refreshed)
                 },
-                onFailure = { e ->
-                    // (d) Refresh failure → log and return null. The
-                    // on-disk blob is NOT rewritten.
-                    Log.w(TAG, "Refresh failed: ${e.message}")
-                    null
+                onFailure = { failure ->
+                    if (failure is RefreshFailure && failure.statusCode in setOf(401, 403)) {
+                        Log.w(TAG, "auth_session_invalid")
+                        SessionRestoreOutcome.InvalidSession
+                    } else {
+                        Log.w(TAG, "auth_session_refresh_failed")
+                        SessionRestoreOutcome.TransientFailure
+                    }
                 }
-            )
-        }
+             )
+         }
     }
 
     private fun loadPersistedState() {
@@ -1018,12 +819,11 @@ class DeviceAuthManager private constructor(
         // role-based routing discriminator (resolveIsChildDevice)
         // classifies them correctly. Safe because in the current
         // codebase `is_paired=true` is ONLY written by `savePairedSession`
-        // / `completePairing` (the child pairing paths); parent devices
-        // go through devLogin / magic-link which never set
-        // `is_paired=true`. PARENT wins over this migration — see the
+        // / `completePairing` (the child pairing paths). PARENT wins over
+        // this migration — see the
         // `hasRole` branch below which is preserved.
         if (isPaired && !hasRole && deviceId != null) {
-            Log.i(TAG, "Migrating pre-fix paired-child install to role=CHILD")
+            Log.i(TAG, "auth_child_role_migration")
             prefs.edit().putString("role", Role.CHILD.name).apply()
         }
 
@@ -1035,68 +835,30 @@ class DeviceAuthManager private constructor(
             else -> SessionState.NONE
         }
         if (isPaired && deviceId == null) {
-            Log.w(
-                TAG,
-                "is_paired=true but device_id missing; falling back to role-aware PAIRED state"
-            )
+            Log.w(TAG, "auth_paired_device_id_missing")
         }
 
         // Cold-start restore: decrypt the persisted session and push it into the
         // in-memory token fields so any `getAccessToken()` consumer that runs
         // before DeviceAuthService.start() sees a non-null token. Mirrors the
         // populate block inside `authenticateOrCreate()` above.
-        restoreSession()?.let { stored ->
-            currentAccessToken = stored.accessToken
-            currentRefreshToken = stored.refreshToken
-            sessionExpiresAt = stored.expiresAt
-        }
-
-        // Slice A — WARNING-1 closure (parent magic-link path). When the
-        // parent authenticates via `signInWithMagicLink` + `verifyMagicLinkOtp`,
-        // the JWT tokens are persisted as an AES/GCM-encrypted blob under
-        // `encrypted_parent_session` (see [persistParentSession]). This block
-        // mirrors the `restoreSession()?.let { stored -> ... }` above for the
-        // parent path: read the blob, decrypt it, populate `currentAccessToken`
-        // and `currentRefreshToken` so the cold-start manager's
-        // `getAccessToken()` is non-null.
-        //
-        // On decryption failure (corrupted blob, AOSP version mismatch, key
-        // rotation), wipe the parent-specific keys so the user lands on the
-        // sign-in screen instead of a PAIRED-but-token-less state. Mirrors
-        // `loadPersistedState` PSC-3 (corrupted blob control).
-        val parentBlob = prefs.getString("encrypted_parent_session", null)
-        if (parentBlob != null) {
-            val parentSession: ParentSessionSerializer? = try {
-                json.decodeFromString<ParentSessionSerializer>(decryptWithKeystore(parentBlob))
-            } catch (e: Exception) {
-                Log.w(TAG, "encrypted_parent_session decrypt failed: ${e.message}")
-                null
+        when (val outcome = restoreSessionOutcome()) {
+            is SessionRestoreOutcome.Restored -> {
+                currentAccessToken = outcome.session.accessToken
+                currentRefreshToken = outcome.session.refreshToken
+                sessionExpiresAt = outcome.session.expiresAt
             }
-            if (parentSession != null) {
-                currentAccessToken = parentSession.accessToken
-                currentRefreshToken = parentSession.refreshToken
-                // Token expiry is not stored in the parent blob — the magic-link
-                // verify response doesn't carry a Supabase-shape `expires_at`
-                // that round-trips through serialization. The token is
-                // refreshed lazily on the next RSC.
-                sessionExpiresAt = 0
-                _sessionState.value = SessionState.PAIRED
-            } else {
-                Log.w(
-                    TAG,
-                    "Clean cutover: wiping parent_id due to corrupted " +
-                        "encrypted_parent_session; routing to sign-in screen"
-                )
-                prefs.edit()
-                    .remove("parent_id")
-                    .remove("encrypted_parent_session")
-                    .apply()
-                currentAccessToken = null
-                currentRefreshToken = null
-                sessionExpiresAt = 0
-                _sessionState.value = SessionState.NONE
+            SessionRestoreOutcome.TransientFailure -> {
+                _sessionState.value = SessionState.EXPIRED
+                Log.w(TAG, "auth_session_reauthentication_unavailable")
+            }
+            SessionRestoreOutcome.InvalidSession -> {
+                prefs.edit().clear().apply()
                 _deviceId.value = null
+                _sessionState.value = SessionState.INVALID
+                Log.w(TAG, "auth_session_reauthentication_required")
             }
+            SessionRestoreOutcome.NoPersistedSession -> Unit
         }
 
         // Synthetic hotfix path (Q1=c cleartext SharedPreferences): when
@@ -1181,15 +943,7 @@ class DeviceAuthManager private constructor(
                 !isPairedChildWithSyntheticFallback &&
                 !isPairedParentWithSyntheticFallbackInDebug
             ) {
-                Log.w(
-                    TAG,
-                    "Clean cutover (Q2=b): wiping legacy parent_id=" +
-                        "\"$persistedParentId\" from device_auth_prefs; " +
-                        "routing to sign-in screen (role=$role, " +
-                        "encrypted_session=$hasEncryptedSession, " +
-                        "synthetic_token=$hasSyntheticToken, " +
-                        "debug_or_shared_mock=$isDebugOrSharedMockBuild)"
-                )
+                Log.w(TAG, "auth_legacy_parent_session_wiped")
                 prefs.edit().clear().apply()
                 // Reset in-memory state too — the wiped prefs means
                 // we have no valid session until the parent re-auths.
@@ -1199,15 +953,7 @@ class DeviceAuthManager private constructor(
                 _sessionState.value = SessionState.NONE
                 _deviceId.value = null
             } else {
-                Log.i(
-                    TAG,
-                    "Clean cutover (Q2=b): skipping wipe for parent_id=" +
-                        "\"$persistedParentId\" because a restorable " +
-                        "session signal is present (role=$role, " +
-                        "encrypted_session=$hasEncryptedSession, " +
-                        "synthetic_token=$hasSyntheticToken, " +
-                        "debug_or_shared_mock=$isDebugOrSharedMockBuild)"
-                )
+                Log.i(TAG, "auth_legacy_parent_session_preserved")
             }
         }
     }
@@ -1217,31 +963,10 @@ class DeviceAuthManager private constructor(
      * (8-4-4-4-12 hex, case-insensitive). Used by the clean-cutover
      * wipe in [loadPersistedState] to distinguish legacy mock-engine
      * sentinels ("parent-demo", "mock-parent-legacy", etc.) from real
-     * `auth.users.id` values written by the magic-link verify path.
+      * `auth.users.id` values written by ordinary authenticated pairing.
      */
     private fun isUuid(s: String): Boolean =
         UUID_REGEX.matches(s)
-
-    /**
-     * Lightweight RFC-5322-ish email format check. Used by
-     * [signInWithMagicLink] to fail fast on obviously-invalid input
-     * before the HTTP round-trip — Supabase returns 400 for
-     * `error: invalid_email` on most malformed addresses, but doing
-     * the check client-side saves a network round-trip and gives a
-     * deterministic `ParentAuthError.InvalidEmail` instead of relying
-     * on Supabase's response shape.
-     *
-     * Not exhaustive — the canonical RFC-5322 grammar is a 600+-line
-     * regex. This is a pragmatic check that catches the common cases
-     * (no `@`, no domain, no TLD, leading/trailing whitespace) without
-     * false-negatives on legitimate addresses.
-     */
-    private fun isValidEmail(s: String): Boolean {
-        if (s.isBlank()) return false
-        val trimmed = s.trim()
-        if (trimmed.length > 254) return false // RFC-5321 SMTP path limit
-        return EMAIL_REGEX.matches(trimmed)
-    }
 
     /**
      * Encrypts [data] with the AES/GCM secret key in the Android Keystore
@@ -1252,10 +977,8 @@ class DeviceAuthManager private constructor(
      * "AndroidKeyStore")` (the project's JVM JCA provider is BouncyCastle,
      * which lacks `AndroidKeyStore`), and the cipher requires it.
      *
-     * The round-trip tests in `DeviceAuthManagerParentSessionCipherTest`
-     * use reflection on the `sessionCipher` field to swap in a test
-     * double — see the class kdoc for the seam pattern. Mirrors the
-     * `internal` visibility of [restoreSession] — same seam pattern.
+     * JVM persistence tests use reflection on the `sessionCipher` field to
+     * swap in a test double — see the class kdoc for the seam pattern.
      */
     internal fun encryptWithKeystore(data: String): String =
         sessionCipher.encrypt(data)
@@ -1308,7 +1031,7 @@ class DeviceAuthManager private constructor(
 private const val AUTH_KEY_ALIAS = "parental_control_auth_key"
 
 /**
- * Production cipher for the parent magic-link session storage (W1).
+ * Production cipher for encrypted auth session storage.
  * Encrypts/decrypts via the AES/GCM secret key in the Android Keystore
  * (see `getOrCreateAuthKey` / `createAuthKey` for the key bootstrap).
  *
@@ -1317,9 +1040,8 @@ private const val AUTH_KEY_ALIAS = "parental_control_auth_key"
  * 4.10.3 cannot instantiate `KeyStore.getInstance("AndroidKeyStore")`,
  * and the cipher requires it (the project's JVM JCA provider is
  * BouncyCastle, which lacks the Android Keystore implementation). The
- * production callsite path remains unchanged: `persistParentSession`
- * and `loadPersistedState` still call `encryptWithKeystore` /
- * `decryptWithKeystore` on the singleton manager, those just delegate
+ * The production callsite uses `persistSession` and `loadPersistedState`,
+ * which delegate
  * to `sessionCipher.encrypt` / `sessionCipher.decrypt` now.
  *
  * Marked `internal open` so test-only `TestableAuthCipher` subclasses
@@ -1375,7 +1097,7 @@ internal open class AuthCipher {
                 cipher.init(Cipher.ENCRYPT_MODE, existingKey)
                 return existingKey
             } catch (e: InvalidKeyException) {
-                Log.w("AuthCipher", "Auth key has incompatible parameters, recreating", e)
+                Log.w("AuthCipher", "auth_key_recreated_invalid_parameters")
                 keyStore.deleteEntry(AUTH_KEY_ALIAS)
             }
         }

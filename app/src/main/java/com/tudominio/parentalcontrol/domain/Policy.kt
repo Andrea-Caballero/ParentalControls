@@ -1,9 +1,13 @@
 package com.tudominio.parentalcontrol.domain
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.Instant
 
 @Serializable
 data class Policy(
@@ -122,56 +126,75 @@ data class Grant(
     }
 
     fun grantedAt(): java.time.LocalDateTime {
-        return try {
-            java.time.LocalDateTime.parse(granted_at, java.time.format.DateTimeFormatter.ISO_DATE_TIME)
-        } catch (e: Exception) {
-            java.time.Instant.parse(granted_at)
-                .atZone(java.time.ZoneOffset.UTC)
-                .toLocalDateTime()
-        }
+        return canonicalInstant(granted_at).atZone(ZoneOffset.UTC).toLocalDateTime()
     }
 
     fun expiresAt(): java.time.LocalDateTime {
-        return try {
-            java.time.LocalDateTime.parse(expires_at, java.time.format.DateTimeFormatter.ISO_DATE_TIME)
-        } catch (e: Exception) {
-            java.time.Instant.parse(expires_at)
-                .atZone(java.time.ZoneOffset.UTC)
-                .toLocalDateTime()
-        }
+        return canonicalInstant(expires_at).atZone(ZoneOffset.UTC).toLocalDateTime()
     }
+
+    fun canonicalGrantedAt(): String = canonicalTimestamp(granted_at)
+
+    fun canonicalExpiresAt(): String = canonicalTimestamp(expires_at)
 
     fun verify() {}
 }
 
 @Serializable
 enum class DeviceState {
-    ACTIVE, LOCKED, DOWNTIME
+    @SerialName("active")
+    ACTIVE,
+    @SerialName("locked")
+    LOCKED,
+    @SerialName("downtime")
+    DOWNTIME
 }
 
 @Serializable
 enum class AppPolicyState {
-    ALLOWED, BLOCKED, LIMITED, ALWAYS_ALLOWED
+    @SerialName("allowed")
+    ALLOWED,
+    @SerialName("blocked")
+    BLOCKED,
+    @SerialName("limited")
+    LIMITED,
+    @SerialName("always_allowed")
+    ALWAYS_ALLOWED
 }
 
 @Serializable
 enum class ScheduleAction {
-    LOCK, ALLOW_ONLY
+    @SerialName("lock")
+    LOCK,
+    @SerialName("allow_only")
+    ALLOW_ONLY
 }
 
 @Serializable
 enum class GrantSource {
-    EXTRA_TIME, REWARD, MANUAL
+    @SerialName("extra_time")
+    EXTRA_TIME,
+    @SerialName("reward")
+    REWARD,
+    @SerialName("manual")
+    MANUAL
 }
 
 @Serializable
 enum class DayOfWeek {
+    @SerialName("MON")
     MONDAY,
+    @SerialName("TUE")
     TUESDAY,
+    @SerialName("WED")
     WEDNESDAY,
+    @SerialName("THU")
     THURSDAY,
+    @SerialName("FRI")
     FRIDAY,
+    @SerialName("SAT")
     SATURDAY,
+    @SerialName("SUN")
     SUNDAY
 }
 
@@ -183,13 +206,29 @@ private fun verifyTimeFormat(time: String, fieldName: String) {
 
 private fun verifyIsoTimestamp(timestamp: String, fieldName: String) {
     require(timestamp.isNotBlank()) { "$fieldName must not be blank" }
-    try {
-        java.time.Instant.parse(timestamp)
-    } catch (e: Exception) {
-        try {
-            java.time.LocalDateTime.parse(timestamp, java.time.format.DateTimeFormatter.ISO_DATE_TIME)
-        } catch (e2: Exception) {
-            throw IllegalArgumentException("$fieldName must be ISO 8601 format, got: $timestamp")
-        }
+    require(timestamp.matches(GRANT_TIMESTAMP_PATTERN)) {
+        "$fieldName must be ISO 8601 timestamp with an offset and at most nanoseconds, got: $timestamp"
     }
+    runCatching { OffsetDateTime.parse(timestamp, DateTimeFormatter.ISO_OFFSET_DATE_TIME) }
+        .getOrElse { throw IllegalArgumentException("$fieldName must be a valid timestamp, got: $timestamp") }
 }
+
+private val GRANT_TIMESTAMP_PATTERN = Regex(
+    "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?(?:Z|[+-]\\d{2}:\\d{2})$"
+)
+
+private fun canonicalInstant(timestamp: String): java.time.Instant =
+    OffsetDateTime.parse(timestamp, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toInstant()
+
+fun canonicalGrantTimestamp(timestamp: String): String {
+    verifyIsoTimestamp(timestamp, "timestamp")
+    return DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+        .withZone(ZoneOffset.UTC)
+        .format(canonicalInstant(timestamp))
+}
+
+fun Instant.toCanonicalGrantTimestamp(): String = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+    .withZone(ZoneOffset.UTC)
+    .format(truncatedTo(ChronoUnit.MILLIS))
+
+private fun canonicalTimestamp(timestamp: String): String = canonicalGrantTimestamp(timestamp)

@@ -11,6 +11,8 @@ import com.tudominio.parentalcontrol.sync.SyncManager
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.time.Instant
 
@@ -67,26 +69,39 @@ class OutboxDrainer @AssistedInject constructor(
         // injection that regression is closed at the type level.
 
         val now = Instant.now().toString()
-        val claimed = outboxManager.claimPendingItems(
-            maxAttempts = MAX_RETRY_ATTEMPTS,
-            limit = PENDING_BATCH_SIZE,
-            now = now
-        )
+        val claim = try {
+            outboxManager.claimPendingItems(
+                maxAttempts = MAX_RETRY_ATTEMPTS,
+                limit = PENDING_BATCH_SIZE,
+                now = now
+            )
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            Log.w(TAG, "Outbox claim failed; retry requested")
+            return@withContext Result.retry()
+        }
+        val claimToken = claim.token
+        val claimed = claim.items
         if (claimed.isEmpty()) {
             Log.d(TAG, "Sin items pendientes, fast success")
             return@withContext Result.success()
         }
 
         var sawRetryable = false
+        val unfinalized = claimed.mapTo(linkedSetOf()) { it.id }
         for (item in claimed) {
-            val result = syncManager.sendOutboxItem(item)
-            val finalizedAt = Instant.now().toString()
-            when (result) {
+            try {
+                val result = syncManager.sendOutboxItem(item)
+                val finalizedAt = Instant.now().toString()
+                when (result) {
                 is OutboxSendResult.Success -> {
-                    outboxManager.markProcessedFromClaim(item.id, finalizedAt)
+                    outboxManager.markProcessedFromClaim(item.id, finalizedAt, claimToken)
+                    unfinalized.remove(item.id)
                 }
                 is OutboxSendResult.RetryableFailure -> {
-                    outboxManager.incrementRetriesFromClaim(item.id)
+                    outboxManager.incrementRetriesFromClaim(item.id, claimToken)
+                    unfinalized.remove(item.id)
                     sawRetryable = true
                     Log.w(
                         TAG,
@@ -97,12 +112,24 @@ class OutboxDrainer @AssistedInject constructor(
                     // Spec: mark processed to avoid an infinite retry loop on
                     // poison rows. The `failed` flag in payload is recorded
                     // by the edge function (out of scope for PR 3).
-                    outboxManager.markProcessedFromClaim(item.id, finalizedAt)
+                    outboxManager.markProcessedFromClaim(item.id, finalizedAt, claimToken)
+                    unfinalized.remove(item.id)
                     Log.w(
                         TAG,
                         "Permanent failure para outbox ${item.id}: HTTP ${result.statusCode}"
                     )
                 }
+                }
+            } catch (cancellation: CancellationException) {
+                withContext(NonCancellable) {
+                    outboxManager.releaseClaims(unfinalized.toList(), claimToken)
+                }
+                throw cancellation
+            } catch (_: Throwable) {
+                runCatching { outboxManager.releaseClaim(item.id, claimToken) }
+                unfinalized.remove(item.id)
+                sawRetryable = true
+                Log.w(TAG, "Outbox finalization failed; retry requested")
             }
         }
 

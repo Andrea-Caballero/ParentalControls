@@ -10,6 +10,7 @@ import com.tudominio.parentalcontrol.outbox.OutboxManager
 import com.tudominio.parentalcontrol.time.DefaultTimeProvider
 import com.tudominio.parentalcontrol.time.TimeProvider
 import com.tudominio.parentalcontrol.workers.WorkScheduler
+import com.tudominio.parentalcontrol.domain.toCanonicalGrantTimestamp
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
@@ -236,8 +237,8 @@ class TimeExtraRepository @Inject constructor(
                     scope = "extra_time",
                     minutes = approvedMinutes,
                     source = "extra_time",
-                    granted_at = now.toString(),
-                    expires_at = expires.toString()
+                    granted_at = now.toCanonicalGrantTimestamp(),
+                    expires_at = expires.toCanonicalGrantTimestamp()
                 )
 
                 grantDao.insertGrant(grant)

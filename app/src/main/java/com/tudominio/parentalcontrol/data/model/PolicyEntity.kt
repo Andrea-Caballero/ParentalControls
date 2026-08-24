@@ -16,5 +16,8 @@ data class PolicyEntity(
     @PrimaryKey val device_id: String,
     val version: Long,
     val category_assignments: Map<String, String>,
-    val device_state: String = "ACTIVE"
+    val device_state: String = "ACTIVE",
+    val daily_screen_time_minutes: Int = 120,
+    val schedules: List<ScheduleEntity> = emptyList(),
+    val category_limits: List<CategoryLimitEntity> = emptyList(),
 )

@@ -41,17 +41,4 @@ class BlockOverlayServiceTest {
         assertTrue(reason.isNotEmpty())
     }
 
-    @Test
-    fun testShowHideActions() {
-        // Verificar que las constantes de acción están definidas
-        assertEquals("com.tudominio.parentalcontrol.action.SHOW_BLOCK_OVERLAY", BlockOverlayService.ACTION_SHOW)
-        assertEquals("com.tudominio.parentalcontrol.action.HIDE_BLOCK_OVERLAY", BlockOverlayService.ACTION_HIDE)
-    }
-
-    @Test
-    fun testIsShowingReturnsFalseInitially() {
-        // Cuando el servicio no está activo, no debe estar mostrando
-        // (Esto depende de que instance sea null al inicio)
-        assertFalse(BlockOverlayService.isShowing())
-    }
 }

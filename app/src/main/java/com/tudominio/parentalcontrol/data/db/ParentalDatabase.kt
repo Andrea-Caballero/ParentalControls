@@ -2,6 +2,7 @@ package com.tudominio.parentalcontrol.data.db
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.Transaction
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -37,7 +38,7 @@ import com.tudominio.parentalcontrol.data.model.UsageTodayEntity
         TimeRequestEntity::class,
         BehavioralEventEntity::class
     ],
-    version = 9,
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -50,6 +51,21 @@ abstract class ParentalDatabase : RoomDatabase() {
     abstract fun outboxDao(): OutboxDao
     abstract fun timeRequestDao(): TimeRequestDao
     abstract fun behavioralEventDao(): BehavioralEventDao
+
+    @Transaction
+    open suspend fun applyPolicyAggregate(
+        policy: PolicyEntity,
+        appPolicies: List<AppPolicyEntity>?
+    ): Boolean {
+        val localVersion = policyDao().getLocalVersion(policy.device_id)
+        if (localVersion != null && policy.version <= localVersion) return false
+        if (appPolicies != null) {
+            appPolicyDao().deleteAppPoliciesForDevice(policy.device_id)
+            appPolicyDao().upsertAppPolicies(appPolicies)
+        }
+        policyDao().insertPolicy(policy)
+        return true
+    }
 
     companion object {
         const val DATABASE_NAME = "parental_control.db"
@@ -169,6 +185,53 @@ abstract class ParentalDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE time_requests ADD COLUMN server_id TEXT"
                 )
+            }
+        }
+
+        val MIGRATION_9_10: Migration = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE policy ADD COLUMN daily_screen_time_minutes INTEGER NOT NULL DEFAULT 120")
+                db.execSQL("ALTER TABLE policy ADD COLUMN schedules TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE policy ADD COLUMN category_limits TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
+        val MIGRATION_10_11: Migration = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val before = db.query("SELECT COUNT(*) FROM time_requests").use {
+                    it.moveToFirst()
+                    it.getLong(0)
+                }
+                db.execSQL(
+                    "CREATE TABLE time_requests_new (" +
+                        "request_id TEXT NOT NULL, device_id TEXT NOT NULL, " +
+                        "package_name TEXT, minutes_requested INTEGER NOT NULL, reason TEXT, " +
+                        "status TEXT NOT NULL, created_at TEXT NOT NULL, responded_at TEXT, " +
+                        "parent_response TEXT, server_id TEXT DEFAULT NULL, " +
+                        "PRIMARY KEY(request_id))"
+                )
+                db.execSQL(
+                    "INSERT INTO time_requests_new (request_id, device_id, package_name, " +
+                        "minutes_requested, reason, status, created_at, responded_at, " +
+                        "parent_response, server_id) SELECT request_id, device_id, package_name, " +
+                        "minutes_requested, reason, status, created_at, responded_at, " +
+                        "parent_response, server_id FROM time_requests"
+                )
+                val after = db.query("SELECT COUNT(*) FROM time_requests_new").use {
+                    it.moveToFirst()
+                    it.getLong(0)
+                }
+                check(before == after) {
+                    "time_requests migration changed row count: $before -> $after"
+                }
+                db.execSQL("DROP TABLE time_requests")
+                db.execSQL("ALTER TABLE time_requests_new RENAME TO time_requests")
+            }
+        }
+
+        val MIGRATION_11_12: Migration = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE outbox ADD COLUMN claim_token TEXT")
             }
         }
     }

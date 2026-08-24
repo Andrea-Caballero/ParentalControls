@@ -46,7 +46,10 @@ object DatabaseModule {
                 ParentalDatabase.MIGRATION_5_6,
                 ParentalDatabase.MIGRATION_6_7,
                 ParentalDatabase.MIGRATION_7_8,
-                ParentalDatabase.MIGRATION_8_9
+                ParentalDatabase.MIGRATION_8_9,
+                ParentalDatabase.MIGRATION_9_10,
+                ParentalDatabase.MIGRATION_10_11,
+                ParentalDatabase.MIGRATION_11_12
             )
             .build()
 

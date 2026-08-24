@@ -22,6 +22,17 @@ sealed class Decision {
     data class Bloquear(val motivo: String) : Decision()
 }
 
+fun evaluateWithoutTrustedTime(policy: Policy, packageName: String): Decision? {
+    if (packageName in listOf("com.agent.app", "com.android.dialer")) return Decision.Permitir
+    if (policy.device_state == DeviceState.LOCKED) {
+        return Decision.Bloquear(MotivoTabla().deviceLocked)
+    }
+    if (policy.app_policies.any { it.package_name == packageName && it.state == AppPolicyState.BLOCKED }) {
+        return Decision.Bloquear(MotivoTabla().appBlocked)
+    }
+    return null
+}
+
 // §0.4 — Algoritmo de precedencia del motor (núcleo)
 // 12 pasos en orden exacto; primera coincidencia decide
 fun evaluar(
@@ -161,7 +172,7 @@ private fun parseTimestamp(ts: String): LocalDateTime {
 }
 
 // §0.4 Paso 1: Apps críticas del agente y sistema
-private fun isCriticalApp(packageName: String): Boolean {
+internal fun isCriticalApp(packageName: String): Boolean {
     return packageName in listOf(
         "com.agent.app",
         "com.android.dialer"

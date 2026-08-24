@@ -15,6 +15,9 @@ interface AppPolicyDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAppPolicies(appPolicies: List<AppPolicyEntity>)
 
+    @Query("DELETE FROM app_policies WHERE device_id = :deviceId")
+    suspend fun deleteAppPoliciesForDevice(deviceId: String)
+
     @Query("SELECT * FROM app_policies WHERE package_name = :packageName")
     suspend fun getAppPolicy(packageName: String): AppPolicyEntity?
 
@@ -24,6 +27,4 @@ interface AppPolicyDao {
     @Query("SELECT * FROM app_policies")
     fun getAllAppPoliciesFlow(): Flow<List<AppPolicyEntity>>
 
-    @Query("DELETE FROM app_policies WHERE device_id = :deviceId")
-    suspend fun deleteAppPoliciesForDevice(deviceId: String)
 }

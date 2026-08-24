@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
+import com.tudominio.parentalcontrol.auth.AuthResult
+import com.tudominio.parentalcontrol.auth.DeviceAuthManager
 import com.tudominio.parentalcontrol.data.db.ParentalDatabase
 import com.tudominio.parentalcontrol.health.HealthMonitor
 import com.tudominio.parentalcontrol.reconciliation.UsageStatsReconciler
@@ -13,8 +15,47 @@ import com.tudominio.parentalcontrol.time.TimeProvider
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
+
+@HiltWorker
+class AuthRestoreWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val authManager: DeviceAuthManager
+) : CoroutineWorker(context, workerParams) {
+    companion object {
+        private const val TAG = "AuthRestoreWorker"
+        const val WORK_NAME = "auth_restore_after_boot"
+    }
+
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        try {
+            when (val result = authManager.authenticateOrCreate()) {
+                is AuthResult.Success -> {
+                    WorkScheduler.scheduleOutboxDrainer(applicationContext)
+                    WorkerInitializer.initialize(applicationContext, isAfterBoot = true)
+                    Result.success()
+                }
+                is AuthResult.Retryable -> {
+                    Log.w(TAG, "Auth restore unavailable; retry requested")
+                    Result.retry()
+                }
+                is AuthResult.NeedsPairing -> Result.failure()
+                is AuthResult.Error -> {
+                    Log.w(TAG, "Auth restore failed; retry requested")
+                    Result.retry()
+                }
+            }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            Log.w(TAG, "Auth restore worker failed; retry requested")
+            Result.retry()
+        }
+    }
+}
 
 @HiltWorker
 class HeartbeatWorker @AssistedInject constructor(

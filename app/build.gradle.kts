@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 
 plugins {
     alias(libs.plugins.android.application)
@@ -62,6 +63,57 @@ val debugSupabaseUrl: String =
 val debugSupabaseAnonKey: String =
     (project.findProperty("supabaseAnonKey") as String?)
         ?: "your-anon-key"
+
+val releaseSupabaseUrl: String = project.findProperty("supabaseUrl") as String? ?: ""
+val releaseSupabaseAnonKey: String = project.findProperty("supabaseAnonKey") as String? ?: ""
+val releaseSupabasePinPrimary: String = project.findProperty("supabasePinPrimary") as String? ?: ""
+val releaseSupabasePinSecondary: String = project.findProperty("supabasePinSecondary") as String? ?: ""
+val releaseSupabasePinBackupCa: String = project.findProperty("supabasePinBackupCa") as String? ?: ""
+
+val releasePinPattern = Regex("^sha256/[A-Za-z0-9+/]{43}=$")
+
+fun requireReleaseSupabaseConfiguration(url: String, key: String, pins: List<String>) {
+    val parsedUrl = java.net.URI(url)
+    require(
+        parsedUrl.scheme == "https" &&
+            parsedUrl.userInfo == null &&
+            parsedUrl.host.matches(Regex("^[a-z0-9]{20}\\.supabase\\.co$")) &&
+            parsedUrl.path.isNullOrEmpty() &&
+            parsedUrl.query == null &&
+            parsedUrl.fragment == null
+    ) {
+        "Release requires -PsupabaseUrl=https://<project>.supabase.co"
+    }
+    require(key.isNotBlank() && !key.startsWith("your-") && !key.contains("placeholder")) {
+        "Release requires -PsupabaseAnonKey=<configured key>"
+    }
+    val decodedPins = pins.map { pin ->
+        pin.removePrefix("sha256/").let { encoded ->
+            runCatching { java.util.Base64.getDecoder().decode(encoded) }.getOrNull()
+        }
+    }
+    require(
+        pins.size == 3 &&
+            pins.toSet().size == pins.size &&
+            pins.all { pin ->
+                releasePinPattern.matches(pin) &&
+                    pin.removePrefix("sha256/").removeSuffix("=").toSet().size > 1
+            } &&
+            decodedPins.all { it?.size == 32 }
+    ) {
+        "Release requires three configured sha256 certificate pins"
+    }
+}
+
+extensions.configure<ApplicationAndroidComponentsExtension> {
+    beforeVariants(selector().withBuildType("release")) {
+        requireReleaseSupabaseConfiguration(
+            releaseSupabaseUrl,
+            releaseSupabaseAnonKey,
+            listOf(releaseSupabasePinPrimary, releaseSupabasePinSecondary, releaseSupabasePinBackupCa)
+        )
+    }
+}
 
 // Certificate pins are build inputs, not application-source constants. Keep
 // recognizable placeholders here so a build without real pins fails closed
@@ -131,13 +183,11 @@ android {
             // design Decision 2 and spec scenario "Release build does not
             // honor local.properties USE_MOCK_SUPABASE".
             buildConfigField("boolean", "USE_MOCK_SUPABASE", "false")
-            // T3 wiring: release reads the same `SUPABASE_URL` /
-            // `SUPABASE_ANON_KEY` from Gradle `-PsupabaseUrl=` /
-            // `-PsupabaseAnonKey=` properties (see debug config for
-            // rationale). Production overrides should come from the
-            // CI/Play Console secrets, not this file.
-            buildConfigField("String", "SUPABASE_URL", "\"$debugSupabaseUrl\"")
-            buildConfigField("String", "SUPABASE_ANON_KEY", "\"$debugSupabaseAnonKey\"")
+            buildConfigField("String", "SUPABASE_URL", "\"$releaseSupabaseUrl\"")
+            buildConfigField("String", "SUPABASE_ANON_KEY", "\"$releaseSupabaseAnonKey\"")
+            buildConfigField("String", "SUPABASE_PIN_PRIMARY", "\"$releaseSupabasePinPrimary\"")
+            buildConfigField("String", "SUPABASE_PIN_SECONDARY", "\"$releaseSupabasePinSecondary\"")
+            buildConfigField("String", "SUPABASE_PIN_BACKUP_CA", "\"$releaseSupabasePinBackupCa\"")
         }
         debug {
             isMinifyEnabled = false

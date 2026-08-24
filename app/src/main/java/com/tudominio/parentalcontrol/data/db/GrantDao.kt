@@ -10,10 +10,16 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface GrantDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertGrant(grant: GrantEntity)
+    suspend fun insertGrant(grant: GrantEntity) = insertGrantCanonical(grant.canonicalized())
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertGrants(grants: List<GrantEntity>)
+    suspend fun insertGrantCanonical(grant: GrantEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertGrants(grants: List<GrantEntity>) = insertGrantsCanonical(grants.map(GrantEntity::canonicalized))
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertGrantsCanonical(grants: List<GrantEntity>)
 
     @Query("SELECT * FROM grants WHERE device_id = :deviceId")
     fun getGrantsForDeviceFlow(deviceId: String): Flow<List<GrantEntity>>
@@ -21,7 +27,7 @@ interface GrantDao {
     @Query("SELECT * FROM grants WHERE device_id = :deviceId AND scope = :scope")
     fun getGrantsForScopeFlow(deviceId: String, scope: String): Flow<List<GrantEntity>>
 
-    @Query("SELECT * FROM grants WHERE device_id = :deviceId AND expires_at > :now")
+    @Query("SELECT * FROM grants WHERE device_id = :deviceId AND strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) > strftime('%Y-%m-%dT%H:%M:%fZ', :now)")
     fun getActiveGrantsFlow(deviceId: String, now: String): Flow<List<GrantEntity>>
 
     /**
@@ -33,7 +39,7 @@ interface GrantDao {
      * query because that path used to leak cross-device grants into the
      * reward balance / extra-time totals.
      */
-    @Query("SELECT * FROM grants WHERE device_id = :deviceId AND scope = :scope AND expires_at > :now")
+    @Query("SELECT * FROM grants WHERE device_id = :deviceId AND scope = :scope AND strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) > strftime('%Y-%m-%dT%H:%M:%fZ', :now)")
     fun getActiveGrantsForScopeFlow(deviceId: String, scope: String, now: String): Flow<List<GrantEntity>>
 
     /**
@@ -42,12 +48,12 @@ interface GrantDao {
      * called `getGrantsForScope(...).first()` and silently summed
      * grants across every paired device).
      */
-    @Query("SELECT * FROM grants WHERE device_id = :deviceId AND scope = :scope AND expires_at > :now")
+    @Query("SELECT * FROM grants WHERE device_id = :deviceId AND scope = :scope AND strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) > strftime('%Y-%m-%dT%H:%M:%fZ', :now)")
     suspend fun getActiveGrantsForScopeOnce(deviceId: String, scope: String, now: String): List<GrantEntity>
 
     @Query("DELETE FROM grants WHERE device_id = :deviceId")
     suspend fun deleteGrantsForDevice(deviceId: String)
 
-    @Query("DELETE FROM grants WHERE expires_at < :now")
+    @Query("DELETE FROM grants WHERE strftime('%Y-%m-%dT%H:%M:%fZ', expires_at) <= strftime('%Y-%m-%dT%H:%M:%fZ', :now)")
     suspend fun deleteExpiredGrants(now: String)
 }

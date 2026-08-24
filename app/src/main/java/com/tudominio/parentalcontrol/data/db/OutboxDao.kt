@@ -48,13 +48,14 @@ interface OutboxDao {
     suspend fun claimPendingItems(
         maxAttempts: Int,
         limit: Int,
-        now: String
+        now: String,
+        claimToken: String
     ): List<OutboxEntity> {
         val rows = selectClaimableItems(maxAttempts, limit)
         if (rows.isNotEmpty()) {
-            markInFlight(rows.map { it.id }, now)
+            markInFlight(rows.map { it.id }, now, claimToken)
         }
-        return rows
+        return selectClaimedItems(rows.map { it.id }, claimToken)
     }
 
     @Query(
@@ -64,8 +65,11 @@ interface OutboxDao {
     )
     suspend fun selectClaimableItems(maxAttempts: Int, limit: Int): List<OutboxEntity>
 
-    @Query("UPDATE outbox SET in_flight = 1, in_flight_at = :now WHERE id IN (:ids)")
-    suspend fun markInFlight(ids: List<UUID>, now: String)
+    @Query("UPDATE outbox SET in_flight = 1, in_flight_at = :now, claim_token = :claimToken WHERE id IN (:ids)")
+    suspend fun markInFlight(ids: List<UUID>, now: String, claimToken: String)
+
+    @Query("SELECT * FROM outbox WHERE id IN (:ids) AND in_flight = 1 AND claim_token = :claimToken")
+    suspend fun selectClaimedItems(ids: List<UUID>, claimToken: String): List<OutboxEntity>
 
     /**
      * Terminal: marks the row processed AND clears the in-flight flag
@@ -74,10 +78,10 @@ interface OutboxDao {
      */
     @Query(
         "UPDATE outbox SET in_flight = 0, in_flight_at = NULL, " +
-            "processed = 1, processed_at = :processedAt " +
-            "WHERE id = :id"
+            "claim_token = NULL, processed = 1, processed_at = :processedAt " +
+            "WHERE id = :id AND in_flight = 1 AND claim_token = :claimToken"
     )
-    suspend fun markProcessedFromClaim(id: UUID, processedAt: String)
+    suspend fun markProcessedFromClaim(id: UUID, processedAt: String, claimToken: String): Int
 
     /**
      * Retryable failure path: clears the in-flight flag AND bumps the
@@ -86,10 +90,10 @@ interface OutboxDao {
      */
     @Query(
         "UPDATE outbox SET in_flight = 0, in_flight_at = NULL, " +
-            "retries = retries + 1 " +
-            "WHERE id = :id"
+            "claim_token = NULL, retries = retries + 1 " +
+            "WHERE id = :id AND in_flight = 1 AND claim_token = :claimToken"
     )
-    suspend fun incrementRetriesFromClaim(id: UUID)
+    suspend fun incrementRetriesFromClaim(id: UUID, claimToken: String): Int
 
     /**
      * Releases the in-flight flag on a single row without touching
@@ -97,8 +101,11 @@ interface OutboxDao {
      * claim without consuming a retry or marking the row terminal
      * (e.g., a worker cancelled mid-iteration).
      */
-    @Query("UPDATE outbox SET in_flight = 0, in_flight_at = NULL WHERE id = :id")
-    suspend fun releaseClaim(id: UUID)
+    @Query("UPDATE outbox SET in_flight = 0, in_flight_at = NULL, claim_token = NULL WHERE id = :id AND in_flight = 1 AND claim_token = :claimToken")
+    suspend fun releaseClaim(id: UUID, claimToken: String): Int
+
+    @Query("UPDATE outbox SET in_flight = 0, in_flight_at = NULL, claim_token = NULL WHERE id IN (:ids) AND in_flight = 1 AND claim_token = :claimToken")
+    suspend fun releaseClaims(ids: List<UUID>, claimToken: String): Int
 
     /**
      * Clears the in-flight flag for rows whose `in_flight_at` is
@@ -109,7 +116,7 @@ interface OutboxDao {
      * pre-claim world and are still under the original retry budget.
      */
     @Query(
-        "UPDATE outbox SET in_flight = 0, in_flight_at = NULL " +
+        "UPDATE outbox SET in_flight = 0, in_flight_at = NULL, claim_token = NULL " +
             "WHERE in_flight = 1 AND in_flight_at IS NOT NULL " +
             "AND in_flight_at < :olderThan"
     )
@@ -126,6 +133,9 @@ interface OutboxDao {
 
     @Query("DELETE FROM outbox WHERE id = :id")
     suspend fun deleteItem(id: UUID)
+
+    @Query("DELETE FROM outbox WHERE id = :id AND in_flight = 1 AND claim_token = :claimToken")
+    suspend fun deleteItemFromClaim(id: UUID, claimToken: String): Int
 
     @Query("DELETE FROM outbox WHERE retries >= :maxAttempts")
     suspend fun deleteFailedItems(maxAttempts: Int)

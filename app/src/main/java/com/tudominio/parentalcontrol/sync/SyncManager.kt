@@ -5,12 +5,18 @@ import android.util.Log
 import com.tudominio.parentalcontrol.auth.DeviceAuthManager
 import com.tudominio.parentalcontrol.data.db.ParentalDatabase
 import com.tudominio.parentalcontrol.data.model.AppPolicyEntity
+import com.tudominio.parentalcontrol.data.model.CategoryLimitEntity
 import com.tudominio.parentalcontrol.data.model.OutboxEntity
 import com.tudominio.parentalcontrol.data.model.PolicyEntity
+import com.tudominio.parentalcontrol.data.model.ScheduleEntity
 import com.tudominio.parentalcontrol.data.model.WindowEntity
 import com.tudominio.parentalcontrol.data.repository.GrantResult
 import com.tudominio.parentalcontrol.data.repository.TimeExtraRepository
 import com.tudominio.parentalcontrol.di.SupabaseClient
+import com.tudominio.parentalcontrol.domain.CategoryLimit
+import com.tudominio.parentalcontrol.domain.DayOfWeek
+import com.tudominio.parentalcontrol.domain.Schedule
+import com.tudominio.parentalcontrol.domain.ScheduleAction
 import com.tudominio.parentalcontrol.network.ConnectionState
 import com.tudominio.parentalcontrol.network.SupabaseClientProvider
 import com.tudominio.parentalcontrol.time.TimeProvider
@@ -28,6 +34,7 @@ import io.ktor.serialization.kotlinx.json.*
 import java.time.ZoneOffset
 import java.time.Instant
 import java.util.UUID
+import javax.inject.Provider
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.*
@@ -82,6 +89,9 @@ data class PolicyPullResponse(
     val category_assignments: Map<String, String>? = null,
     val app_policies: List<AppPolicyResponse>? = null,
     val server_time: Long? = null,
+    val daily_screen_time_minutes: Int = 120,
+    val schedules: List<ScheduleDto> = emptyList(),
+    val category_limits: List<CategoryLimitDto> = emptyList(),
     // R4 — child reads the parent's `device_state` (LOCKED / ACTIVE)
     // here so the local enforcement flow can pick up a parent's lock
     // or unlock on the next pullPolicy cycle. The shared Python mock
@@ -99,6 +109,67 @@ data class AppPolicyResponse(
     val daily_limit_minutes: Int? = null,
     val allowed_windows: List<String>? = null
 )
+
+/**
+ * Wire DTO for a `schedules` row returned by the parent's
+ * `get_device_policy` RPC. The production Supabase schema (see
+ * `supabase/migrations/001_initial_schema.sql`) emits legacy
+ * uppercase `action` (`'LOCK'`, `'ALLOW_ONLY'`) and full
+ * day names (`'MONDAY'`, `'TUESDAY'`, …). The canonical domain
+ * [Schedule] now serializes to lowercase (`'lock'`, `'allow_only'`)
+ * and abbreviated (`'MON'`, `'TUE'`, …) tokens, so we cannot
+ * decode the live wire shape directly. The DTO keeps every field
+ * as a plain String and only maps to the canonical
+ * [ScheduleEntity] (= [Schedule]) at the applyPolicy boundary —
+ * the `domain/Policy.kt` `@SerialName` mappings are not touched.
+ *
+ * Unknown tokens are rejected (caller-visible
+ * `IllegalArgumentException`) so a typo in the backend or a
+ * rolled-back deploy is surfaced loud, not silent.
+ */
+@Serializable
+data class ScheduleDto(
+    val id: String,
+    val days: List<String>,
+    val from: String,
+    val to: String,
+    val action: String,
+    val allow_list: List<String>? = null,
+) {
+    fun toDomain(): ScheduleEntity = Schedule(
+        id = id,
+        days = days.map(::parseDayOfWeek),
+        from = from,
+        to = to,
+        action = parseScheduleAction(action),
+        allow_list = allow_list,
+    )
+}
+
+@Serializable
+data class CategoryLimitDto(
+    val category: String,
+    val minutes: Int,
+) {
+    fun toDomain(): CategoryLimitEntity = CategoryLimit(category, minutes)
+}
+
+private fun parseScheduleAction(token: String): ScheduleAction = when (token.uppercase()) {
+    "LOCK" -> ScheduleAction.LOCK
+    "ALLOW_ONLY" -> ScheduleAction.ALLOW_ONLY
+    else -> throw IllegalArgumentException("Unknown schedule action: $token")
+}
+
+private fun parseDayOfWeek(token: String): DayOfWeek = when (token.uppercase()) {
+    "MON", "MONDAY" -> DayOfWeek.MONDAY
+    "TUE", "TUESDAY" -> DayOfWeek.TUESDAY
+    "WED", "WEDNESDAY" -> DayOfWeek.WEDNESDAY
+    "THU", "THURSDAY" -> DayOfWeek.THURSDAY
+    "FRI", "FRIDAY" -> DayOfWeek.FRIDAY
+    "SAT", "SATURDAY" -> DayOfWeek.SATURDAY
+    "SUN", "SUNDAY" -> DayOfWeek.SUNDAY
+    else -> throw IllegalArgumentException("Unknown day of week: $token")
+}
 
 /**
  * Wire shape of a `time_requests` row that the child pulls to learn about
@@ -138,7 +209,8 @@ class SyncManager @Inject constructor(
     @ApplicationContext private val context: Context,
     @SupabaseClient private val httpClient: HttpClient,
     private var database: ParentalDatabase,
-    private val timeProvider: TimeProvider
+    private val timeProvider: TimeProvider,
+    private val timeExtraRepositoryProvider: Provider<TimeExtraRepository>
 ) {
     companion object {
         private const val TAG = "SyncManager"
@@ -282,17 +354,17 @@ class SyncManager @Inject constructor(
                 header("apikey", SupabaseClientProvider.SUPABASE_ANON_KEY)
             }
 
-            when {
-                response.status == HttpStatusCode.NotModified -> {
-                    SyncResult.Success
-                }
-                response.status.isSuccess() -> {
-                    val body = response.bodyAsText()
-                    val policyResponse = Json.decodeFromString<PolicyPullResponse>(body)
-
-                    if (policyResponse.version > localVersion) {
-                        applyPolicy(policyResponse, deviceId)
+                when {
+                    response.status == HttpStatusCode.NotModified -> {
+                        SyncResult.Success
                     }
+                    response.status.isSuccess() -> {
+                        val body = response.bodyAsText()
+                        val policyResponse = decodePolicyPullResponse(body)
+
+                        if (policyResponse.version > localVersion) {
+                            applyPolicy(policyResponse, deviceId)
+                        }
 
                     confirmTrustedTime(policyResponse, timeProvider)
 
@@ -364,7 +436,7 @@ class SyncManager @Inject constructor(
         val rows = pullJson.decodeFromString<List<ApprovedRequestDto>>(response.bodyAsText())
         if (rows.isEmpty()) return@withContext
 
-        val timeExtraRepo = TimeExtraRepository.getInstance(context)
+        val timeExtraRepo = timeExtraRepositoryProvider.get()
         var applied = 0
         for (row in rows) {
             val minutes = if (row.minutes_approved > 0) row.minutes_approved else 0
@@ -409,44 +481,57 @@ class SyncManager @Inject constructor(
             // compatibility with the pre-claim sync semantics — the
             // claim is harmless on a hard delete because the row goes
             // away entirely.
-            val claimed = database.outboxDao().claimPendingItems(
-                MAX_RETRY_ATTEMPTS,
-                50,
-                now
-            )
+            val claimToken = UUID.randomUUID().toString()
+            val claimed = try {
+                database.outboxDao().claimPendingItems(
+                    MAX_RETRY_ATTEMPTS,
+                    50,
+                    now,
+                    claimToken
+                )
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                return@withContext SyncResult.Error("outbox claim unavailable")
+            }
             if (claimed.isEmpty()) break
 
+            val unfinalized = claimed.mapTo(linkedSetOf()) { it.id }
             for (item in claimed) {
-                when (sendOutboxItem(item, accessToken)) {
-                    is OutboxSendResult.Success ->
-                        // Legacy semantics: hard delete the row on
-                        // success. The canonical `OutboxDrainer` path
-                        // uses `markProcessed` (soft delete) so the
-                        // periodic `deleteProcessedOlderThan` sweeper
-                        // can audit. Both paths now share the claim
-                        // flow, so neither double-sends.
-                        database.outboxDao().deleteItem(item.id)
-                    is OutboxSendResult.RetryableFailure -> {
-                        // Clears in_flight + bumps retries in one
-                        // statement so the row is re-claimable on
-                        // the next cycle.
-                        database.outboxDao().incrementRetriesFromClaim(item.id)
-                        failedCount++
+                try {
+                    when (sendOutboxItem(item, accessToken)) {
+                        is OutboxSendResult.Success -> {
+                            if (database.outboxDao().deleteItemFromClaim(item.id, claimToken) == 1) {
+                                unfinalized.remove(item.id)
+                            } else {
+                                failedCount++
+                            }
+                        }
+                        is OutboxSendResult.RetryableFailure -> {
+                            if (database.outboxDao().incrementRetriesFromClaim(item.id, claimToken) == 1) {
+                                unfinalized.remove(item.id)
+                            }
+                            failedCount++
+                        }
+                        is OutboxSendResult.PermanentFailure -> {
+                            if (database.outboxDao().markProcessedFromClaim(
+                                    item.id,
+                                    java.time.Instant.now().toString(),
+                                    claimToken
+                                ) == 1
+                            ) unfinalized.remove(item.id)
+                            failedCount++
+                        }
                     }
-                    is OutboxSendResult.PermanentFailure -> {
-                        // Clears in_flight + marks processed in one
-                        // statement. The pre-claim legacy behavior
-                        // was to leave the row in place — the next
-                        // drain cycle would re-pick it and loop
-                        // forever. Marking processed aligns with the
-                        // canonical `OutboxDrainer` path and fixes
-                        // the infinite-loop latent bug.
-                        database.outboxDao().markProcessedFromClaim(
-                            item.id,
-                            java.time.Instant.now().toString()
-                        )
-                        failedCount++
+                } catch (cancellation: CancellationException) {
+                    withContext(NonCancellable) {
+                        database.outboxDao().releaseClaims(unfinalized.toList(), claimToken)
                     }
+                    throw cancellation
+                } catch (_: Exception) {
+                    runCatching { database.outboxDao().releaseClaim(item.id, claimToken) }
+                    unfinalized.remove(item.id)
+                    failedCount++
                 }
             }
         }
@@ -530,24 +615,16 @@ class SyncManager @Inject constructor(
             device_id = deviceId,
             version = response.version,
             category_assignments = response.category_assignments ?: emptyMap(),
-            device_state = response.device_state ?: "ACTIVE"
+            device_state = response.device_state ?: "ACTIVE",
+            daily_screen_time_minutes = response.daily_screen_time_minutes,
+            schedules = response.schedules.map { it.toDomain() },
+            category_limits = response.category_limits.map { it.toDomain() },
         )
-        database.policyDao().upsertPolicyIfNewer(policyEntity)
-
-        // F2a — the in-memory `_deviceStateFlow` is now redundant
-        // (the Room policy is the single source of truth). Kept for
-        // backward compatibility with any external consumer; setting it
-        // from the persisted value keeps the StateFlow coherent with
-        // the table.
-        response.device_state?.let { state ->
-            _deviceStateFlow.value = state
-        }
-
-        response.app_policies?.forEach { appPolicy ->
+        val appPolicyEntities = response.app_policies?.map { appPolicy ->
             val windows = appPolicy.allowed_windows?.map { windowStr ->
                 WindowEntity(days = emptyList(), from = windowStr, to = windowStr)
             } ?: emptyList()
-            val entity = AppPolicyEntity(
+            AppPolicyEntity(
                 package_name = appPolicy.package_name,
                 device_id = deviceId,
                 state = appPolicy.state,
@@ -555,7 +632,16 @@ class SyncManager @Inject constructor(
                 allowed_windows = windows,
                 category = null
             )
-            database.appPolicyDao().upsertAppPolicy(entity)
+        }
+        val applied = database.applyPolicyAggregate(policyEntity, appPolicyEntities)
+
+        // F2a — the in-memory `_deviceStateFlow` is now redundant
+        // (the Room policy is the single source of truth). Kept for
+        // backward compatibility with any external consumer; setting it
+        // from the persisted value keeps the StateFlow coherent with
+        // the table.
+        if (applied) response.device_state?.let { state ->
+            _deviceStateFlow.value = state
         }
     }
 
@@ -699,6 +785,27 @@ internal fun confirmTrustedTime(
 
     timeProvider.confirmTrustedTime(Instant.ofEpochSecond(serverTime))
     return true
+}
+
+/**
+ * Public decoder for [PolicyPullResponse] used by [SyncManager.pullPolicy]
+ * AND by the unit tests. The Supabase `get_device_policy` RPC embeds
+ * `device_id` at the top level of the response (alongside `policy_id`,
+ * `device_name`, `app_version`, `last_sync_at`, `fetched_at`, …) — a
+ * strict default `Json` would throw a `SerializationException` for
+ * every one of those and the outer `try { … } catch (e: Exception)`
+ * in `pullPolicy` would silently fall back to `SyncResult.Offline`.
+ *
+ * The fix is the narrowest possible: a one-shot `Json` config with
+ * `ignoreUnknownKeys = true` is used ONLY for this decode, so the
+ * canonical `domain/Policy` decoder remains strict and any other
+ * surface that needs strict validation is unaffected. Unknown
+ * `action` / `days` tokens inside the wire DTO are still rejected
+ * (see [ScheduleDto.toDomain]).
+ */
+fun decodePolicyPullResponse(body: String): PolicyPullResponse {
+    val json = Json { ignoreUnknownKeys = true }
+    return json.decodeFromString<PolicyPullResponse>(body)
 }
 
 /**

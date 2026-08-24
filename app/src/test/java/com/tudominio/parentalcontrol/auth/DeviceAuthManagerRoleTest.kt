@@ -173,8 +173,7 @@ class DeviceAuthManagerRoleTest {
         // the next getRole() returns CHILD. The migration is safe
         // because in the current codebase is_paired=true is only
         // written by savePairedSession / completePairing (the child
-        // pairing paths); parent devices go through devLogin /
-        // magic-link which never set is_paired=true.
+        // parent authentication does not set is_paired=true.
         val prefs = context.getSharedPreferences("device_auth_prefs", Context.MODE_PRIVATE)
         prefs.edit()
             .clear()

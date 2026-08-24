@@ -143,6 +143,8 @@ class TimeExtraRepositoryTest {
         assertEquals("extra_time", grant.source)
         assertEquals("extra_time", grant.scope)
         assertEquals(30, grant.minutes)
+        assertEquals("2023-11-14T22:13:20.000Z", grant.granted_at)
+        assertEquals("2023-11-14T22:43:20.000Z", grant.expires_at)
     }
 
     /**

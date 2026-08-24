@@ -7,29 +7,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
- * Onboarding role-selection screen. The parent card now lands on the
- * magic-link sign-in screen via `onSelectParent` (the deeper parent
- * auth flow is no longer inline; see `MagicLinkSignInScreen` +
- * `MagicLinkViewModel`). The child card still routes to the pairing
- * flow via `onSelectChild`.
+ * Onboarding role-selection screen. Parent sign-in is currently disabled;
+ * the child card routes to pairing via `onSelectChild`.
  *
- * Retarget history (Slice A → follow-up #1):
- *  - Pre-Slice-A: parent card → inline synthetic anonymous auth
- *    (`ParentViewModel.authenticateAsParent`),
- *    `onAuthenticated` callback fired on success.
- *  - Slice A (Q1=b magic-link; 6e102b9 → 10eb08d): the synthetic
- *    path was kept for the dashboard's `AuthMissingErrorBanner`, but
- *    the production onboarding parent-card wire was a deviation #1 in
- *    the Slice A apply-progress (`scope = future PR`).
- *  - Follow-up #1 (this PR): the parent card now calls
- *    `onSelectParent()` so `NavGraph` can route to
- *    `MagicLinkSignInScreen`. The synthetic hotfix path remains
- *    wired (dashboard AuthMissing CTA is unaffected).
+ * The parent card remains visible for role context but is explicitly
+ * disabled until a supported parent-auth flow is shipped.
  *
  * The role cards use [Card] with [Modifier.clickable] (not
  * `OutlinedCard(onClick = ...)`) because the Material3 `onClick`
@@ -40,7 +29,6 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 fun OnboardingScreen(
-    onSelectParent: () -> Unit = {},
     onSelectChild: () -> Unit = {}
 ) {
     Column(
@@ -86,8 +74,8 @@ fun OnboardingScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("onboarding_parent_card")
-                .clickable {
-                    onSelectParent()
+                .semantics {
+                    disabled()
                 },
             colors = CardDefaults.outlinedCardColors()
         ) {
@@ -112,6 +100,12 @@ fun OnboardingScreen(
                         text = "Gestionar dispositivos de mis hijos",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Inicio de sesión no disponible",
+                        modifier = Modifier.testTag("onboarding_parent_unavailable"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }

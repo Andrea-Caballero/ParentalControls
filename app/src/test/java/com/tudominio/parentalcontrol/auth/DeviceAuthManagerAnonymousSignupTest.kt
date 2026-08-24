@@ -86,7 +86,6 @@ class DeviceAuthManagerAnonymousSignupTest {
         }) { install(ContentNegotiation) { json() } }
 
     /** Deterministic base64 round-trip cipher override. Mirrors the
-     * `TestableAuthCipher` from `DeviceAuthManagerParentSessionCipherTest`. */
     private class TestableCipher : AuthCipher() {
         override fun encrypt(data: String): String =
             android.util.Base64.encodeToString(data.toByteArray(), android.util.Base64.NO_WRAP)

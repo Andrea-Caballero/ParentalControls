@@ -6,7 +6,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tudominio.parentalcontrol.auth.DeviceAuthManager
-import com.tudominio.parentalcontrol.auth.DeviceAuthManagerMagicLinkVerifier
 import com.tudominio.parentalcontrol.copy.CopyManager
 import com.tudominio.parentalcontrol.data.repository.TimeExtraRepositoryEntryPoint
 import com.tudominio.parentalcontrol.pairing.PairingViewModel
@@ -48,15 +47,8 @@ import dagger.hilt.android.EntryPointAccessors
 fun AppNavHost(
     prefilledPairingCode: String?,
     pendingExtraTimePackage: String?,
-    pendingMagicLinkUrl: String? = null,
-    pendingAuthenticatedRoute: Long? = null,
     onPairingComplete: () -> Unit,
     onExtraTimeConsumed: () -> Unit,
-    onMagicLinkConsumed: () -> Unit = {},
-    onAuthenticatedRouteConsumed: () -> Unit = {},
-    // Slice B1 — forwarded to MagicLinkSignInScreen; activity wires to a
-    // nav trigger (no more recreate, see MainActivity.pendingAuthenticatedRoute).
-    onAuthenticated: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val authManager = remember { DeviceAuthManager.getInstance(context) }
@@ -67,11 +59,6 @@ fun AppNavHost(
             TimeExtraRepositoryEntryPoint::class.java
         ).timeExtraRepository()
     }
-    // Continuation #2: the magic-link deep-link handler is a pure class;
-    // wrap the `DeviceAuthManager` singleton in the verifier adapter so
-    // the handler stays Context-free and NavGraph can run it off the
-    // pending URL without a Hilt dependency.
-    val magicLinkVerifier = remember { DeviceAuthManagerMagicLinkVerifier(authManager) }
     val isPaired = authManager.isPaired()
     // Slice B1 — fix-1 (discriminator): use the explicit Role flag
     // instead of the previous `isPaired && parent_id != null` heuristic.
@@ -89,8 +76,6 @@ fun AppNavHost(
         isChildDevice = isChildDevice,
         prefilledPairingCode = prefilledPairingCode,
         pendingExtraTimePackage = pendingExtraTimePackage,
-        pendingMagicLinkUrl = pendingMagicLinkUrl,
-        pendingAuthenticatedRoute = pendingAuthenticatedRoute,
         parentViewModel = hiltViewModel<ParentViewModel>(),
         appsViewModel = hiltViewModel<AppsViewModel>(),
         pairingViewModel = hiltViewModel<PairingViewModel>(),
@@ -98,11 +83,7 @@ fun AppNavHost(
         copyManager = copyManager,
         timeExtraRepository = timeExtraRepository,
         deviceId = deviceId,
-        magicLinkVerifier = magicLinkVerifier,
         onPairingComplete = onPairingComplete,
         onExtraTimeConsumed = onExtraTimeConsumed,
-        onMagicLinkConsumed = onMagicLinkConsumed,
-        onAuthenticatedRouteConsumed = onAuthenticatedRouteConsumed,
-        onAuthenticated = onAuthenticated
     )
 }

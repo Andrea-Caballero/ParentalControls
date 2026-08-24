@@ -7,6 +7,10 @@ import com.tudominio.parentalcontrol.admin.LockManager
 import com.tudominio.parentalcontrol.auth.DeviceAuthManager
 import com.tudominio.parentalcontrol.data.db.ParentalDatabase
 import com.tudominio.parentalcontrol.data.model.PolicyEntity
+import com.tudominio.parentalcontrol.domain.CategoryLimit
+import com.tudominio.parentalcontrol.domain.DayOfWeek
+import com.tudominio.parentalcontrol.domain.Schedule
+import com.tudominio.parentalcontrol.domain.ScheduleAction
 import com.tudominio.parentalcontrol.time.DefaultTimeProvider
 import io.mockk.every
 import io.mockk.mockk
@@ -70,6 +74,36 @@ class EnforcementControllerDeviceStateTest {
     fun tearDown() {
         runCatching { database.close() }
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `live reconstruction reads persisted policy fields`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val deviceId = MutableStateFlow<String?>("dev-policy")
+        database.policyDao().insertPolicy(
+            PolicyEntity(
+                device_id = "dev-policy",
+                version = 9L,
+                category_assignments = emptyMap(),
+                daily_screen_time_minutes = 37,
+                schedules = listOf(Schedule("sleep", listOf(DayOfWeek.FRIDAY), "22:00", "07:00", ScheduleAction.LOCK)),
+                category_limits = listOf(CategoryLimit("social", 12)),
+            ),
+        )
+        val auth = mockk<DeviceAuthManager>(relaxed = true)
+        every { auth.deviceId } returns deviceId
+        val controller = EnforcementController(
+            context, database, DefaultTimeProvider(context), auth, mockk(relaxed = true),
+        )
+        testScheduler.advanceUntilIdle()
+
+        val policy = controller.javaClass.getDeclaredField("currentPolicy").run {
+            isAccessible = true
+            get(controller) as com.tudominio.parentalcontrol.domain.Policy
+        }
+        assertEquals(37, policy.daily_screen_time_minutes)
+        assertEquals("sleep", policy.schedules.single().id)
+        assertEquals(com.tudominio.parentalcontrol.domain.CategoryLimit("social", 12), policy.category_limits.single())
     }
 
     @Test

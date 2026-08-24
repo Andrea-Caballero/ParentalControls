@@ -1,6 +1,12 @@
 package com.tudominio.parentalcontrol.push
 
 import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.work.Configuration
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.testing.WorkManagerTestInitHelper
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
@@ -10,6 +16,9 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.fail
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Tests para FCM Push Service y helpers.
@@ -105,6 +114,39 @@ class FcmPushServiceConstantsTest {
     fun `payload keys are defined`() {
         assertEquals("priority", FcmPushService.KEY_PRIORITY)
         assertEquals("message_id", FcmPushService.KEY_MESSAGE_ID)
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
+class FcmApprovalSignalIntegrationTest {
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+
+    @Before
+    fun setUp() {
+        runCatching {
+            WorkManagerTestInitHelper.initializeTestWorkManager(
+                context,
+                Configuration.Builder().build()
+            )
+        }
+        WorkManager.getInstance(context).cancelUniqueWork("${FcmPushService.WORK_TAG_SYNC}_high")
+    }
+
+    @Test
+    fun `grant approved signal enqueues unique tagged sync work`() {
+        FcmPushService.processMessage(
+            context,
+            mapOf("type" to "grant.approved", "request_id" to "request-1"),
+            priority = "high"
+        )
+
+        val work = WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWork("${FcmPushService.WORK_TAG_SYNC}_high")
+            .get()
+            .single()
+        assertEquals(WorkInfo.State.ENQUEUED, work.state)
+        assertTrue(work.tags.contains(FcmPushService.WORK_TAG_SYNC))
     }
 }
 

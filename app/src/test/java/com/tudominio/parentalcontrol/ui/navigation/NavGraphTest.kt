@@ -176,7 +176,6 @@ class NavGraphTest {
     @Test
     fun resolveIsChildDevice_pairedParentRole_returnsFalse() {
         // THE BUG: previously this branch routed the OPPO parent to
-        // the CHILD UI after devLogin because parent_id was present.
         assertEquals(false, resolveIsChildDevice(isPaired = true, role = Role.PARENT))
     }
 

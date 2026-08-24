@@ -37,11 +37,8 @@ class MainActivity : ComponentActivity() {
 
     private val prefilledPairingCode = mutableStateOf<String?>(null)
     private val pendingExtraTimePackage = mutableStateOf<String?>(null)
-    private val pendingMagicLinkUrl = mutableStateOf<String?>(null)
-    // Slice B1 — fix-1: nav trigger for the devLogin success path;
     // NavGraph's LaunchedEffect routes to Dashboard without calling
     // recreate() (see field kdoc in commit body for the root cause).
-    private val pendingAuthenticatedRoute = mutableStateOf<Long?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,11 +75,6 @@ class MainActivity : ComponentActivity() {
             "pair" -> prefilledPairingCode.value = data.getQueryParameter("code")
             "request-extra-time" ->
                 pendingExtraTimePackage.value = data.getQueryParameter("pkg") ?: ""
-            // Continuation #2: forward the full magic-link URL to the
-            // NavGraph, which runs MagicLinkDeepLinkHandler off it. We pass
-            // the whole URI string (not the parsed params) so the pure,
-            // Context-free handler owns all parsing/validation in one place.
-            "magic-link" -> pendingMagicLinkUrl.value = data.toString()
         }
     }
 
@@ -107,14 +99,8 @@ class MainActivity : ComponentActivity() {
         AppNavHost(
             prefilledPairingCode = prefilledPairingCode.value,
             pendingExtraTimePackage = pendingExtraTimePackage.value,
-            pendingMagicLinkUrl = pendingMagicLinkUrl.value,
-            pendingAuthenticatedRoute = pendingAuthenticatedRoute.value,
             onPairingComplete = ::restartActivity,
             onExtraTimeConsumed = { pendingExtraTimePackage.value = null },
-            onMagicLinkConsumed = { pendingMagicLinkUrl.value = null },
-            onAuthenticatedRouteConsumed = { pendingAuthenticatedRoute.value = null },
-            // Slice B1 — devLogin success → set nav trigger (replaces `::restartActivity`).
-            onAuthenticated = { pendingAuthenticatedRoute.value = System.currentTimeMillis() }
         )
     }
 }

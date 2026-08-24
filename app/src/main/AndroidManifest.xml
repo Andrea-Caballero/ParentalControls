@@ -2,10 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-  <instrumentation
-      android:name="com.tudominio.parentalcontrol.MyHiltTestRunner"
-      android:targetPackage="com.tudominio.parentalcontrol" />
-
   <!-- Permisos necesarios -->
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -25,6 +21,7 @@
   <application
     android:name="com.tudominio.parentalcontrol.ParentalControlApp"
     android:allowBackup="true"
+    android:dataExtractionRules="@xml/data_extraction_rules"
     android:fullBackupContent="@xml/secure_storage_backup_rules"
     android:icon="@mipmap/ic_launcher"
     android:label="@string/app_name"
@@ -72,23 +69,6 @@
             android:host="request-extra-time" />
       </intent-filter>
 
-      <!-- Continuation #2: deeplink for the parent magic-link round-trip —
-           `parentalcontrol://magic-link?token=<hash>&email=<addr>`.
-           Supabase dispatches the magic-link email; tapping it fires this
-           VIEW intent, MainActivity extracts the query params and the
-           NavGraph runs MagicLinkDeepLinkHandler → verifyMagicLinkOtp →
-           Dashboard. Mirrors the `pair` / `request-extra-time` filters. -->
-      <intent-filter>
-        <action android:name="android.intent.action.VIEW" />
-
-        <category android:name="android.intent.category.DEFAULT" />
-        <category android:name="android.intent.category.BROWSABLE" />
-
-        <data
-            android:scheme="parentalcontrol"
-            android:host="magic-link" />
-      </intent-filter>
-
     </activity>
 
       <service
@@ -112,7 +92,11 @@
     <service
         android:name=".overlay.BlockOverlayService"
         android:exported="false"
-        android:foregroundServiceType="specialUse" />
+        android:foregroundServiceType="specialUse">
+        <property
+            android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+            android:value="overlay_enforcement" />
+    </service>
 
     <receiver
         android:name=".admin.ParentalDeviceAdminReceiver"

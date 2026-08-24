@@ -1,6 +1,8 @@
 package com.tudominio.parentalcontrol.data.db
 
 import androidx.room.TypeConverter
+import com.tudominio.parentalcontrol.data.model.CategoryLimitEntity
+import com.tudominio.parentalcontrol.data.model.ScheduleEntity
 import com.tudominio.parentalcontrol.data.model.WindowEntity
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -27,6 +29,18 @@ object Converters {
     fun toWindowList(value: String): List<WindowEntity> {
         return Json.decodeFromString(value)
     }
+
+    @TypeConverter
+    fun fromScheduleList(value: List<ScheduleEntity>): String = Json.encodeToString(value)
+
+    @TypeConverter
+    fun toScheduleList(value: String): List<ScheduleEntity> = Json.decodeFromString(value)
+
+    @TypeConverter
+    fun fromCategoryLimitList(value: List<CategoryLimitEntity>): String = Json.encodeToString(value)
+
+    @TypeConverter
+    fun toCategoryLimitList(value: String): List<CategoryLimitEntity> = Json.decodeFromString(value)
 
     @TypeConverter
     fun fromStringList(value: List<String>): String {

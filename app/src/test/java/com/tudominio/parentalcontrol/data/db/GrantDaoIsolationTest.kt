@@ -271,6 +271,32 @@ class GrantDaoIsolationTest {
         assertEquals(listOf("future"), active.map { it.id })
     }
 
+    @Test
+    fun getActiveGrantsFlow_compares_equivalent_offsets_as_the_same_instant() = runBlocking {
+        val now = "2026-07-27T10:00:00.000Z"
+        grantDao.insertGrant(
+            grant("offset-equal", "dev-A", "extra_time", 15, "2026-07-27T12:00:00+02:00")
+        )
+        grantDao.insertGrant(
+            grant("offset-future", "dev-A", "extra_time", 20, "2026-07-27T12:00:01+02:00")
+        )
+
+        val active = grantDao.getActiveGrantsFlow("dev-A", now).first()
+
+        assertEquals(listOf("offset-future"), active.map { it.id })
+    }
+
+    @Test
+    fun deleteExpiredGrants_removes_expiry_equality() = runBlocking {
+        val now = "2026-07-27T10:00:00.000Z"
+        grantDao.insertGrant(grant("equal", "dev-A", "extra_time", 15, now))
+        grantDao.insertGrant(grant("future", "dev-A", "extra_time", 20, "2026-07-27T10:00:01Z"))
+
+        grantDao.deleteExpiredGrants(now)
+
+        assertEquals(listOf("future"), grantDao.getGrantsForDeviceFlow("dev-A").first().map { it.id })
+    }
+
     // ===== Goal 1: device-isolated deletion =====
 
     /**

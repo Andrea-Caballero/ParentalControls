@@ -92,6 +92,27 @@ object WorkScheduler {
         Log.d(TAG, "Outbox drainer programado")
     }
 
+    fun scheduleAuthRestore(context: Context) {
+        val request = OneTimeWorkRequestBuilder<AuthRestoreWorker>()
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                WorkRequest.MIN_BACKOFF_MILLIS,
+                TimeUnit.MILLISECONDS
+            )
+            .addTag(AuthRestoreWorker.WORK_NAME)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            AuthRestoreWorker.WORK_NAME,
+            ExistingWorkPolicy.KEEP,
+            request
+        )
+    }
+
     /**
      * Fires an immediate one-shot drain of the outbox. Used after enqueuing a
      * row in places where we don't want to wait for the 15-minute periodic

@@ -11,6 +11,7 @@ import dagger.hilt.android.EntryPointAccessors
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.buildJsonObject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
@@ -38,6 +39,9 @@ class OutboxManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val database: ParentalDatabase
 ) {
+
+    data class ClaimBatch(val token: String, val items: List<OutboxEntity>)
+    class ClaimOwnershipLostException : IllegalStateException("outbox claim ownership lost")
 
     companion object {
         private const val TAG = "OutboxManager"
@@ -172,32 +176,27 @@ class OutboxManager @Inject constructor(
         maxAttempts: Int = MAX_RETRIES,
         limit: Int = 50,
         now: String
-    ): List<OutboxEntity> {
+    ): ClaimBatch {
+        val claimToken = UUID.randomUUID().toString()
         return try {
             releaseStaleClaims(now)
-            outboxDao.claimPendingItems(maxAttempts, limit, now)
+            ClaimBatch(claimToken, outboxDao.claimPendingItems(maxAttempts, limit, now, claimToken))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error claiming pending items: ${e.message}")
-            emptyList()
+            throw e
         }
     }
 
     private suspend fun releaseStaleClaims(now: String) {
-        try {
-            // `now` is an ISO-8601 instant. Subtract the TTL via
-            // java.time to get the cutoff. We keep the operation in
-            // java.time so the SQL string compare stays a plain
-            // lexicographic compare on ISO-8601 (which is monotonic).
-            val cutoff = java.time.Instant.parse(now)
-                .minusSeconds(STALE_CLAIM_TTL_SECONDS)
-                .toString()
-            outboxDao.releaseStaleClaims(cutoff)
-        } catch (e: Exception) {
-            // A parse failure means the caller is using a non-ISO
-            // timestamp — log and skip the recovery pass; the
-            // legacy retry budget catches truly stuck rows anyway.
-            Log.w(TAG, "Skipping stale-claim recovery: ${e.message}")
+        val cutoff = runCatching {
+            java.time.Instant.parse(now).minusSeconds(STALE_CLAIM_TTL_SECONDS).toString()
+        }.getOrElse {
+            Log.w(TAG, "Skipping stale-claim recovery: invalid timestamp")
+            return
         }
+        outboxDao.releaseStaleClaims(cutoff)
     }
 
     /**
@@ -205,11 +204,15 @@ class OutboxManager @Inject constructor(
      * flag in one statement so the sweeper can't reclaim a row that
      * already reached the server.
      */
-    suspend fun markProcessedFromClaim(id: UUID, processedAt: String) {
+    suspend fun markProcessedFromClaim(id: UUID, processedAt: String, claimToken: String) {
         try {
-            outboxDao.markProcessedFromClaim(id, processedAt)
+            if (outboxDao.markProcessedFromClaim(id, processedAt, claimToken) != 1) {
+                throw ClaimOwnershipLostException()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error marking item processed: ${e.message}")
+            runCatching { outboxDao.releaseClaim(id, claimToken) }
+            throw e
         }
     }
 
@@ -218,11 +221,15 @@ class OutboxManager @Inject constructor(
      * retry counter in one statement so the row becomes claimable again
      * (with its new retry count) on the next drain cycle.
      */
-    suspend fun incrementRetriesFromClaim(id: UUID) {
+    suspend fun incrementRetriesFromClaim(id: UUID, claimToken: String) {
         try {
-            outboxDao.incrementRetriesFromClaim(id)
+            if (outboxDao.incrementRetriesFromClaim(id, claimToken) != 1) {
+                throw ClaimOwnershipLostException()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error incrementing retries: ${e.message}")
+            runCatching { outboxDao.releaseClaim(id, claimToken) }
+            throw e
         }
     }
 
@@ -232,13 +239,17 @@ class OutboxManager @Inject constructor(
      * abort a claim mid-iteration (e.g., a worker cancelled before
      * processing the item).
      */
-    suspend fun releaseClaim(id: UUID) {
+    suspend fun releaseClaim(id: UUID, claimToken: String): Boolean {
         try {
-            outboxDao.releaseClaim(id)
+            return outboxDao.releaseClaim(id, claimToken) == 1
         } catch (e: Exception) {
             Log.e(TAG, "Error releasing claim: ${e.message}")
+            throw e
         }
     }
+
+    suspend fun releaseClaims(ids: List<UUID>, claimToken: String): Int =
+        outboxDao.releaseClaims(ids, claimToken)
 
     /**
      * Marks the given outbox row as processed and stamps the timestamp. Used

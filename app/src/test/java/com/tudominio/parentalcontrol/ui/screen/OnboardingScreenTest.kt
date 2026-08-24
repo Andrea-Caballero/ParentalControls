@@ -1,10 +1,9 @@
 package com.tudominio.parentalcontrol.ui.screen
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
 import com.tudominio.parentalcontrol.ui.theme.ParentalControlTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -12,7 +11,6 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -27,29 +25,13 @@ import org.robolectric.annotation.Config
  *
  * Behavior under test:
  *
- *  1. Tapping the parent card (`onboarding_parent_card`) fires
- *     [OnboardingScreen]'s `onSelectParent` callback. The detailed
- *     magic-link flow now lives in
- *     [com.tudominio.parentalcontrol.ui.auth.MagicLinkSignInScreen]
- *     (see `MagicLinkSignInScreenTest` for the full contract).
- *  2. The child card is structural-only — `performClick()` on the
+ *  1. Parent sign-in is visibly unavailable and the parent card is disabled.
+ *  2. The child card is structural-only — interaction on the
  *     `Row`-based child card has a known flake in this project's
  *     Compose test environment (same root cause as the pre-follow-up
  *     `child_tap_does_not_trigger_parent_auth` test). We verify the
  *     structural invariant via `assertExists` and the absence of
- *     parent-side side-effects (`onSelectParent` must NOT fire when
- *     the structural render is inspected).
- *  3. Initial state: the parent card is enabled. No loading indicator
- *     at rest (the loading state moved to `MagicLinkSignInScreen`).
- *
- * The pre-follow-up version of this test pinned the OLD behavior
- * (parent tap → `viewModel.authenticateAsParent()` → synthetic token →
- * nav). The synthetic hotfix path is still wired (the dashboard's
- * `AuthMissingErrorBanner` uses it), so
- * [com.tudominio.parentalcontrol.viewmodel.ParentViewModel.authenticateAsParent]
- * is not deleted — but the OnboardingScreen parent card no longer
- * drives it. Tests for the synthetic path itself live elsewhere
- * (see `ParentViewModelTest`).
+ *  3. No loading indicator exists at rest.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
@@ -70,32 +52,23 @@ class OnboardingScreenTest {
     }
 
     @Test
-    fun parent_tap_invokes_onSelectParent() {
-        var parentSelected = 0
-        var childSelected = 0
+    fun parent_sign_in_is_disabled_with_clear_message() {
         composeTestRule.setContent {
             ParentalControlTheme {
-                OnboardingScreen(
-                    onSelectParent = { parentSelected++ },
-                    onSelectChild = { childSelected++ }
-                )
+                OnboardingScreen(onSelectChild = {})
             }
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithTag("onboarding_parent_card").performClick()
-        composeTestRule.waitForIdle()
-
-        // Parent callback fired exactly once; child callback did NOT fire.
-        assertEquals(1, parentSelected)
-        assertEquals(0, childSelected)
+        composeTestRule.onNodeWithTag("onboarding_parent_card").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("onboarding_parent_unavailable").assertIsDisplayed()
     }
 
     @Test
     fun child_card_has_structural_testTag() {
         composeTestRule.setContent {
             ParentalControlTheme {
-                OnboardingScreen(onSelectParent = {}, onSelectChild = {})
+                OnboardingScreen(onSelectChild = {})
             }
         }
         composeTestRule.waitForIdle()
@@ -109,18 +82,15 @@ class OnboardingScreenTest {
     }
 
     @Test
-    fun parent_card_is_enabled_before_any_tap() {
+    fun parent_card_is_disabled_before_any_tap() {
         composeTestRule.setContent {
             ParentalControlTheme {
-                OnboardingScreen(onSelectParent = {}, onSelectChild = {})
+                OnboardingScreen(onSelectChild = {})
             }
         }
         composeTestRule.waitForIdle()
 
-        // Initial render: the parent card is enabled (no loading state).
-        composeTestRule.onNodeWithTag("onboarding_parent_card").assertIsEnabled()
-        // No loading indicator at rest (loading lives on MagicLinkSignInScreen
-        // now, not OnboardingScreen).
+        composeTestRule.onNodeWithTag("onboarding_parent_card").assertIsNotEnabled()
         composeTestRule.onNodeWithTag("onboarding_auth_loading").assertDoesNotExist()
     }
 
@@ -128,7 +98,7 @@ class OnboardingScreenTest {
     fun parent_card_is_displayed() {
         composeTestRule.setContent {
             ParentalControlTheme {
-                OnboardingScreen(onSelectParent = {}, onSelectChild = {})
+                OnboardingScreen(onSelectChild = {})
             }
         }
         composeTestRule.waitForIdle()

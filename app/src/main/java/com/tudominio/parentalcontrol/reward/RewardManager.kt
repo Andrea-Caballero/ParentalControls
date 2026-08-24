@@ -4,8 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.tudominio.parentalcontrol.data.db.ParentalDatabase
 import com.tudominio.parentalcontrol.data.model.GrantEntity
-import com.tudominio.parentalcontrol.time.DefaultTimeProvider
 import com.tudominio.parentalcontrol.time.TimeProvider
+import com.tudominio.parentalcontrol.domain.toCanonicalGrantTimestamp
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -30,7 +30,8 @@ import kotlinx.coroutines.flow.map
 @Singleton
 class RewardManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val database: ParentalDatabase
+    private val database: ParentalDatabase,
+    private val timeProvider: TimeProvider,
 ) {
 
     companion object {
@@ -57,8 +58,6 @@ class RewardManager @Inject constructor(
     }
 
     private val grantDao = database.grantDao()
-    private val timeProvider: TimeProvider = DefaultTimeProvider(context)
-
     // Prefs para el tope máximo
     private val prefs = context.getSharedPreferences("reward_prefs", Context.MODE_PRIVATE)
 
@@ -207,17 +206,14 @@ class RewardManager @Inject constructor(
         grantId: String,
         deviceId: String,
         minutes: Int,
-        expiresAt: Instant
+        expiresAt: Instant,
+        grantedAt: Instant = timeProvider.wallInstant(),
     ): Boolean {
         if (deviceId.isBlank()) {
             Log.w(TAG, "processRewardGrant called with blank deviceId — refusing to write an orphaned row")
             return false
         }
         return try {
-            val now = timeProvider.wallInstant()
-            val grantedAt = now.toString()
-            val expiresAtStr = expiresAt.toString()
-
             val grant = GrantEntity(
                 id = "reward_$grantId",
                 device_id = deviceId,
@@ -225,8 +221,8 @@ class RewardManager @Inject constructor(
                 scope = REWARD_SCOPE,
                 minutes = minutes,
                 source = "reward",
-                granted_at = grantedAt,
-                expires_at = expiresAtStr
+                granted_at = grantedAt.toCanonicalGrantTimestamp(),
+                expires_at = expiresAt.toCanonicalGrantTimestamp()
             )
 
             grantDao.insertGrant(grant)

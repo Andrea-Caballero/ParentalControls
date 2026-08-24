@@ -55,5 +55,7 @@ data class OutboxEntity(
      * recovery (they were claimed in the pre-claim world, so we leave
      * them alone). New column in v9.
      */
-    val in_flight_at: String? = null
+    val in_flight_at: String? = null,
+    /** Opaque UUID identifying the exact drainer ownership batch. */
+    val claim_token: String? = null
 )

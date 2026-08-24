@@ -139,7 +139,6 @@ class DeviceAuthManagerColdStartTest {
      * [StoredSession].
      *
      * Verified via reflection + the [TestableAuthCipher] seam (mirrors
-     * `DeviceAuthManagerParentSessionCipherTest.testableManager()`).
      * Earlier versions of this test used `spyk` (MockK) to stub
      * `restoreSession()`, but W1 (cipher extraction) added an `internal
      * var sessionCipher` field whose field initializer is consulted by

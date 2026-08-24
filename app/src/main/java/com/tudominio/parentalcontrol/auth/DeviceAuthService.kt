@@ -23,6 +23,7 @@ class DeviceAuthService(private val context: Context) {
         private const val REFRESH_INTERVAL_MS = 4 * 60 * 1000L // 4 minutos
         private const val HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000L // 5 minutos
         private const val MAX_RETRY_COUNT = 3
+        private const val MAX_RETRY_DELAY_MS = 8_000L
         
         @Volatile
         private var instance: DeviceAuthService? = null
@@ -64,7 +65,9 @@ class DeviceAuthService(private val context: Context) {
      * Inicia el servicio de autenticación.
      */
     fun start() {
-        if (_authState.value != AuthServiceState.IDLE) return
+        if (_authState.value != AuthServiceState.IDLE &&
+            _authState.value != AuthServiceState.RETRYING
+        ) return
         
         scope.launch {
             _authState.value = AuthServiceState.STARTING
@@ -92,6 +95,9 @@ class DeviceAuthService(private val context: Context) {
                     _authState.value = AuthServiceState.NEEDS_PAIRING
                     _connectionState.value = ConnectionState.NEEDS_PAIRING
                     onNeedsPairing?.invoke()
+                }
+                is AuthResult.Retryable -> {
+                    enterRetryableState()
                 }
                 is AuthResult.Error -> {
                     _authState.value = AuthServiceState.ERROR
@@ -135,6 +141,10 @@ class DeviceAuthService(private val context: Context) {
                 _authState.value = AuthServiceState.NEEDS_PAIRING
                 _connectionState.value = ConnectionState.NEEDS_PAIRING
                 onNeedsPairing?.invoke()
+                return false
+            }
+            is AuthResult.Retryable -> {
+                enterRetryableState()
                 return false
             }
             is AuthResult.Error -> {
@@ -184,6 +194,10 @@ class DeviceAuthService(private val context: Context) {
                 onSessionExpired?.invoke()
                 return false
             }
+            is AuthResult.Retryable -> {
+                enterRetryableState()
+                return false
+            }
             is AuthResult.Error -> {
                 _connectionState.value = ConnectionState.ERROR
                 return false
@@ -213,6 +227,10 @@ class DeviceAuthService(private val context: Context) {
                     is AuthResult.NeedsPairing -> {
                         _connectionState.value = ConnectionState.NEEDS_PAIRING
                         onSessionExpired?.invoke()
+                        break
+                    }
+                    is AuthResult.Retryable -> {
+                        enterRetryableState()
                         break
                     }
                     is AuthResult.Error -> {
@@ -271,6 +289,9 @@ class DeviceAuthService(private val context: Context) {
                     _connectionState.value = ConnectionState.NEEDS_PAIRING
                     onNeedsPairing?.invoke()
                 }
+                is AuthResult.Retryable -> {
+                    enterRetryableState()
+                }
                 is AuthResult.Error -> {
                     scheduleRetry()
                 }
@@ -291,9 +312,17 @@ class DeviceAuthService(private val context: Context) {
         _authState.value = AuthServiceState.RETRYING
         
         scope.launch {
-            delay((currentRetry + 1) * 1000L) // Exponential backoff
+            val delayMs = (1_000L shl currentRetry).coerceAtMost(MAX_RETRY_DELAY_MS)
+            delay(delayMs)
             start()
         }
+    }
+
+    private fun enterRetryableState() {
+        _authState.value = AuthServiceState.RETRYING
+        _connectionState.value = ConnectionState.DISCONNECTED
+        onConnectionLost?.invoke()
+        scheduleRetry()
     }
 
     /**
